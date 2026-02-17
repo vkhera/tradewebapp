@@ -1,6 +1,7 @@
 package com.example.stockbrokerage.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,6 +18,7 @@ import java.time.Duration;
 public class CacheConfig {
     
     @Bean
+    @ConditionalOnBean(RedisConnectionFactory.class)
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory, ObjectMapper objectMapper) {
         // Use the ObjectMapper configured with JavaTimeModule
         GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(objectMapper);
