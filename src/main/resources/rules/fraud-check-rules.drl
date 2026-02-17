@@ -1,0 +1,29 @@
+package rule com.example.stockbrokerage.fraud
+
+import com.example.stockbrokerage.entity.Trade
+
+global java.util.Map result
+
+rule "Check Maximum Single Trade Value"
+    when
+        $trade: Trade(price.multiply(new java.math.BigDecimal(quantity)).compareTo(new java.math.BigDecimal("1000000")) > 0)
+    then
+        result.put("approved", false);
+        ((StringBuilder)result.get("reasons")).append("Single trade value exceeds $1,000,000 limit. ");
+end
+
+rule "Check Symbol Validity"
+    when
+        $trade: Trade(symbol == null || symbol.trim().length() == 0)
+    then
+        result.put("approved", false);
+        ((StringBuilder)result.get("reasons")).append("Invalid symbol. ");
+end
+
+rule "Check Negative Price"
+    when
+        $trade: Trade(price.compareTo(java.math.BigDecimal.ZERO) <= 0)
+    then
+        result.put("approved", false);
+        ((StringBuilder)result.get("reasons")).append("Price must be positive. ");
+end
