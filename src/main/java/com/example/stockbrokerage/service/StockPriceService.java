@@ -54,8 +54,7 @@ public class StockPriceService {
     
     private BigDecimal tryQuoteEndpoint(String symbol) {
         try {
-            String url = String.format(
-                "https://query1.finance.yahoo.com/v7/finance/quote?symbols=%s",
+            String url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols=%s".formatted(
                 symbol
             );
             
@@ -69,7 +68,7 @@ public class StockPriceService {
                 if (quoteResponse.containsKey("result")) {
                     var results = (java.util.List<Map<String, Object>>) quoteResponse.get("result");
                     if (!results.isEmpty()) {
-                        Map<String, Object> quote = results.get(0);
+                        Map<String, Object> quote = results.getFirst();
                         
                         // Try regularMarketPrice first, then fallback to other price fields
                         Object priceObj = quote.get("regularMarketPrice");
@@ -98,8 +97,7 @@ public class StockPriceService {
     
     private BigDecimal tryChartEndpoint(String symbol) {
         try {
-            String url = String.format(
-                "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=1d",
+            String url = "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=1d".formatted(
                 symbol
             );
             
@@ -113,7 +111,7 @@ public class StockPriceService {
                 if (chart.containsKey("result")) {
                     var results = (java.util.List<Map<String, Object>>) chart.get("result");
                     if (!results.isEmpty()) {
-                        Map<String, Object> result = results.get(0);
+                        Map<String, Object> result = results.getFirst();
                         Map<String, Object> meta = (Map<String, Object>) result.get("meta");
                         
                         if (meta != null && meta.containsKey("regularMarketPrice")) {
@@ -134,8 +132,7 @@ public class StockPriceService {
     
     private BigDecimal tryV6QuoteEndpoint(String symbol) {
         try {
-            String url = String.format(
-                "https://query2.finance.yahoo.com/v6/finance/quote?symbols=%s",
+            String url = "https://query2.finance.yahoo.com/v6/finance/quote?symbols=%s".formatted(
                 symbol
             );
             
@@ -149,7 +146,7 @@ public class StockPriceService {
                 if (quoteResponse.containsKey("result")) {
                     var results = (java.util.List<Map<String, Object>>) quoteResponse.get("result");
                     if (!results.isEmpty()) {
-                        Map<String, Object> quote = results.get(0);
+                        Map<String, Object> quote = results.getFirst();
                         
                         Object priceObj = quote.get("regularMarketPrice");
                         if (priceObj == null) {
@@ -180,8 +177,7 @@ public class StockPriceService {
      */
     public Map<String, Object> getQuote(String symbol) {
         try {
-            String url = String.format(
-                "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=1d",
+            String url = "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=1d".formatted(
                 symbol
             );
             

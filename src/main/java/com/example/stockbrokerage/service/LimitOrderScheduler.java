@@ -105,8 +105,8 @@ public class LimitOrderScheduler {
                     }
                     
                     tradeRepository.save(trade);
-                    auditService.logTradeEvent(trade.getId(), "EXECUTE", "SYSTEM", 
-                            String.format("Limit order executed at market price %s", currentPrice));
+                    auditService.logTradeEvent(trade.getId(), "EXECUTE", "SYSTEM",
+                        "Limit order executed at market price %s".formatted(currentPrice));
                     executed++;
                     log.info("Successfully executed limit order {}", trade.getId());
                 }
