@@ -1,0 +1,37 @@
+package com.example.stockbrokerage.rules;
+
+global org.slf4j.Logger logger;
+
+import com.example.stockbrokerage.entity.Trade;
+import com.example.stockbrokerage.entity.Trade.TradeType;
+import com.example.stockbrokerage.service.TradingRulesService;
+import java.math.BigDecimal;
+
+rule "Validate Sufficient Funds for Buy Orders"
+    when
+        $trade: Trade(type == TradeType.BUY, 
+                     status == Trade.TradeStatus.PENDING,
+                     fraudCheckPassed == true)
+        $tradingRules: TradingRulesService()
+    then
+        BigDecimal tradeAmount = $trade.getPrice().multiply(BigDecimal.valueOf($trade.getQuantity()));
+        
+        boolean hasFunds = $tradingRules.validateSufficientFunds($trade.getClientId(), tradeAmount);
+        
+        if (!hasFunds) {
+            logger.info("Trade {} rejected: Insufficient funds. Client: {}, Required: {}", 
+                $trade.getId(), $trade.getClientId(), tradeAmount);
+            modify($trade) {
+                setStatus(Trade.TradeStatus.REJECTED),
+                setFraudCheckReason("Insufficient available funds (including pending orders)")
+            }
+        } else {
+            logger.info("Trade {} funds validated. Client: {}, Amount: {}", 
+                $trade.getId(), $trade.getClientId(), tradeAmount);
+            // Reserve funds for this pending order
+            $tradingRules.reserveFundsForTrade($trade.getClientId(), tradeAmount);
+            modify($trade) {
+                setStatus(Trade.TradeStatus.VALIDATED)
+            }
+        }
+end
