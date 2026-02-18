@@ -8,6 +8,7 @@ import com.example.stockbrokerage.entity.Portfolio;
 import com.example.stockbrokerage.repository.AccountRepository;
 import com.example.stockbrokerage.repository.PortfolioRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PortfolioService {
     
     private final PortfolioRepository portfolioRepository;
@@ -74,6 +76,9 @@ public class PortfolioService {
         BigDecimal profitLossPercent = investedValue.compareTo(BigDecimal.ZERO) > 0
             ? profitLoss.divide(investedValue, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
             : BigDecimal.ZERO;
+        
+        // Weight updates are now handled by the batch scheduler for better performance
+        // No blocking operations during portfolio page load
         
         return new PortfolioResponse(
             portfolio.getId(),

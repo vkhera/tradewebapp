@@ -8,6 +8,7 @@ import { FundAccountComponent } from './components/fund-account.component';
 import { OrderHistoryComponent } from './components/order-history.component';
 import { RealizedGainsComponent } from './components/realized-gains.component';
 import { UnrealizedGainsComponent } from './components/unrealized-gains.component';
+import { ImportDataComponent } from './components/import-data.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: '/login', pathMatch: 'full' },
@@ -18,6 +19,7 @@ export const routes: Routes = [
   { path: 'realized-gains', component: RealizedGainsComponent },
   { path: 'unrealized-gains', component: UnrealizedGainsComponent },
   { path: 'fund-account', component: FundAccountComponent },
+  { path: 'import-data', component: ImportDataComponent },
   { path: 'admin/clients', component: AdminClientsComponent },
   { path: 'admin/rules', component: AdminRulesComponent }
 ];

@@ -177,4 +177,39 @@ export class ApiService {
   getStockPrice(symbol: string): Observable<any> {
     return this.http.get<any>(`${this.baseUrl}/stocks/price/${symbol}`, this.getHttpOptions());
   }
+
+  // Import APIs
+  importHoldings(clientId: number, fileName: string): Observable<any> {
+    return this.http.post<any>(`${this.baseUrl}/import/holdings`, 
+      { clientId, fileName }, 
+      this.getHttpOptions());
+  }
+
+  importActivity(clientId: number, fileName: string): Observable<any> {
+    return this.http.post<any>(`${this.baseUrl}/import/activity`, 
+      { clientId, fileName }, 
+      this.getHttpOptions());
+  }
+
+  cleanupClientData(clientId: number): Observable<any> {
+    console.log('cleanupClientData called with clientId:', clientId);
+    const options = {
+      ...this.getHttpOptions(),
+      body: { clientId }
+    };
+    console.log('Request options:', options);
+    console.log('Request URL:', `${this.baseUrl}/import/cleanup`);
+    return this.http.delete<any>(`${this.baseUrl}/import/cleanup`, options);
+  }
+
+  // Trend Analysis APIs
+  getTrendAnalysis(symbol: string): Observable<any> {
+    // Use the fast cached endpoint for quick portfolio loading
+    return this.http.get<any>(`${this.baseUrl}/trends/last/${symbol}`, this.getHttpOptions());
+  }
+  
+  // Force recalculation if needed (not used in portfolio loading)
+  analyzeTrend(symbol: string): Observable<any> {
+    return this.http.get<any>(`${this.baseUrl}/trends/analyze/${symbol}`, this.getHttpOptions());
+  }
 }

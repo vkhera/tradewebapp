@@ -50,6 +50,7 @@ import { ApiService } from '../services/api.service';
         <thead>
           <tr>
             <th>Symbol</th>
+            <th>Trend</th>
             <th>Quantity</th>
             <th>Avg Price</th>
             <th>Current Price</th>
@@ -61,6 +62,12 @@ import { ApiService } from '../services/api.service';
         <tbody>
           <tr *ngFor="let holding of portfolio">
             <td class="symbol">{{ holding.symbol }}</td>
+            <td class="trend-cell">
+              <span *ngIf="holding.trend === 'UPTREND'" class="trend-arrow up" title="Uptrend ({{holding.confidence}}% confidence)">↗</span>
+              <span *ngIf="holding.trend === 'DOWNTREND'" class="trend-arrow down" title="Downtrend ({{holding.confidence}}% confidence)">↘</span>
+              <span *ngIf="holding.trend === 'SIDEWAYS'" class="trend-arrow sideways" title="Sideways ({{holding.confidence}}% confidence)">→</span>
+              <span *ngIf="!holding.trend" class="trend-arrow loading">⋯</span>
+            </td>
             <td>{{ holding.quantity }}</td>
             <td>\${{ holding.averagePrice | number:'1.2-2' }}</td>
             <td>\${{ holding.currentPrice | number:'1.2-2' }}</td>
@@ -214,6 +221,40 @@ import { ApiService } from '../services/api.service';
     .total-row td {
       border-bottom: none;
     }
+    
+    .trend-cell {
+      text-align: center;
+      font-size: 1.5rem;
+    }
+    
+    .trend-arrow {
+      display: inline-block;
+      font-size: 1.8rem;
+      font-weight: bold;
+      cursor: help;
+    }
+    
+    .trend-arrow.up {
+      color: #10b981;
+    }
+    
+    .trend-arrow.down {
+      color: #ef4444;
+    }
+    
+    .trend-arrow.sideways {
+      color: #f59e0b;
+    }
+    
+    .trend-arrow.loading {
+      color: #9ca3af;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
   `]
 })
 export class PortfolioComponent implements OnInit {
@@ -243,11 +284,31 @@ export class PortfolioComponent implements OnInit {
         this.portfolio = data.holdings;
         this.totalValue = data.totalPortfolioValue;
         this.loading = false;
+        
+        // Load trend analysis for each holding
+        this.loadTrends();
       },
       error: (error) => {
         console.error('Error loading portfolio:', error);
         this.loading = false;
       }
+    });
+  }
+  
+  loadTrends() {
+    this.portfolio.forEach(holding => {
+      this.apiService.getTrendAnalysis(holding.symbol).subscribe({
+        next: (trendData) => {
+          holding.trend = trendData.overallTrend;
+          holding.confidence = Math.round(trendData.confidence * 100);
+          holding.techniqueResults = trendData.techniqueResults;
+        },
+        error: (error) => {
+          console.error(`Error loading trend for ${holding.symbol}:`, error);
+          holding.trend = 'SIDEWAYS';
+          holding.confidence = 0;
+        }
+      });
     });
   }
 
