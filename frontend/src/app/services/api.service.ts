@@ -212,4 +212,13 @@ export class ApiService {
   analyzeTrend(symbol: string): Observable<any> {
     return this.http.get<any>(`${this.baseUrl}/trends/analyze/${symbol}`, this.getHttpOptions());
   }
+
+  // Stock Price Prediction APIs
+  getPricePredictions(symbol: string): Observable<any> {
+    return this.http.get<any>(`${this.baseUrl}/predictions/${symbol}`, this.getHttpOptions());
+  }
+
+  refreshPricePredictions(symbol: string): Observable<any> {
+    return this.http.post<any>(`${this.baseUrl}/predictions/${symbol}/refresh`, {}, this.getHttpOptions());
+  }
 }

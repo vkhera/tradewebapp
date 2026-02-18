@@ -62,3 +62,6 @@ importexport/
 
 # Application logs
 logs/
+
+# Runtime-generated stock price prediction data
+stock_predictions/
