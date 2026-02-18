@@ -53,3 +53,12 @@ buildNumber.properties
 
 # macOS
 .DS_Store
+
+# Runtime-generated trend analysis data
+trend_predictions/
+
+# User import/export data
+importexport/
+
+# Application logs
+logs/
