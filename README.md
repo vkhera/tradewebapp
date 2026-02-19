@@ -37,6 +37,94 @@ A low-latency stock brokerage web application built with Spring Boot backend and
 - Reactive Forms
 - Server-Side Rendering (SSR)
 
+## Architecture
+
+```mermaid
+graph TB
+    subgraph Browser["Browser (Angular 17 · port 4200)"]
+        direction LR
+        LOGIN[Login]
+        PORTFOLIO[Portfolio\n+ Prediction Tooltip]
+        TRADE[Trade]
+        HISTORY[Order History]
+        ADMIN[Admin UI\nClients · Rules · Trades]
+    end
+
+    subgraph Backend["Spring Boot Backend (Java 21 · port 8080)"]
+        direction TB
+
+        subgraph API["REST Layer"]
+            AC[AuthController]
+            AEC[AccountController]
+            PC[PortfolioController]
+            SC[StockController]
+            TC[TradeController]
+            TRC[TrendAnalysisController]
+            PRC[StockPricePredictionController]
+            IC[ImportController]
+            CC[ClientController]
+            CAC[ClientAdminController]
+            TAC[TradeAdminController]
+            RAC[RuleAdminController]
+        end
+
+        subgraph SVC["Business Services"]
+            TS[TradeService]
+            PS[PortfolioService]
+            SPS[StockPriceService\nYahoo Finance 3-endpoint fallback]
+            SMDS[StockMarketDataService\n5-min bars · CSV cache · 5 min TTL]
+            SPPS[StockPricePredictionService\n5 techniques · adaptive weights\n50-min cache]
+            TAS[TrendAnalysisService\n5 techniques · per-stock weights]
+            IS[ImportService\nSchwab CSV holdings + activity]
+            RS[ReconciliationService]
+            LOS[LimitOrderService]
+        end
+
+        subgraph RULES["Drools Rule Engine"]
+            FR[fraud-check-rules.drl\nTrading hours · daily limits\nclient status · size checks]
+            CR[cash-validation-rules.drl\nAvailable balance · reserve checks]
+        end
+
+        subgraph SCHED["Schedulers"]
+            TABS[TrendAnalysisBatchService\nDaily 4:30 PM ET cron]
+            SPPBS[StockPricePredictionBatchService\nHourly · resolves actuals\nupdates weights]
+            LOP[LimitOrderScheduler\nEvery 5 min]
+            REC[ReconciliationScheduler\nEvery 1 min]
+        end
+
+        subgraph SEC["Security & Docs"]
+            SS[Spring Security\nBasic Auth · RBAC]
+            SW[Swagger / OpenAPI 3\nBearer JWT · 12 tags\nlocalhost:8080/swagger-ui.html]
+        end
+    end
+
+    subgraph DATA["Data Layer (Docker)"]
+        PG[(PostgreSQL 16\nport 5432\nstockdb)]
+        RD[(Redis 7\nport 6379\nSession · Cache)]
+    end
+
+    subgraph CSV["CSV Filesystem"]
+        TPC[trend_predictions/\nSYMBOL_trend.csv]
+        SPC[stock_predictions/\nSYMBOL_pred_weights.csv\nSYMBOL_predictions.csv\nSYMBOL_bars.csv]
+        IMP[importexport/\nholdings.csv · activity.csv]
+    end
+
+    subgraph EXT["External API (Free · No Key)"]
+        YF[Yahoo Finance v8 Chart\ninterval=5m · range=60d\nUser-Agent header]
+    end
+
+    Browser -->|HTTP/JSON Bearer Auth| API
+    API --> SVC
+    API --> RULES
+    SVC --> RULES
+    SCHED --> SVC
+    SVC --> DATA
+    SVC --> CSV
+    SMDS -->|HTTPS GET| YF
+    SS --> API
+    SW --> API
+```
+
 ## Prerequisites
 
 - **JDK 17 or higher** (Java 23 recommended)
