@@ -1,0 +1,5 @@
+reports/
+playwright-report/
+test-results/
+.lighthouseci/
+node_modules/

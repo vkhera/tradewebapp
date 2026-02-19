@@ -16,6 +16,18 @@ A low-latency stock brokerage web application built with Spring Boot backend and
 - **High-Speed Database**: PostgreSQL with optimized connection pooling
 - **Caching**: Redis-based caching for improved performance
 
+## Quality Checks Toolkit
+
+A project-level quality automation toolkit is available in [quality/README.md](quality/README.md).
+
+It includes:
+
+- General code quality checks (Java + Angular)
+- Static security code review (Semgrep + dependency scan)
+- Frontend post-build functional tests (Playwright)
+- Frontend performance checks for all screens (Lighthouse CI)
+- API functional and performance tests (k6)
+
 ## Technology Stack
 
 ### Backend

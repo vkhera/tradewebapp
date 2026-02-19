@@ -1,0 +1,29 @@
+rules:
+  - id: java-spring-security-sensitive-endpoints
+    patterns:
+      - pattern: |
+          @RequestMapping($PATH)
+          class $C {
+            ...
+          }
+      - pattern-not: |
+          @RequestMapping("/actuator/**")
+          class $C {
+            ...
+          }
+    message: "Review endpoint authorization and role checks for this controller."
+    severity: WARNING
+    languages: [java]
+
+  - id: java-hardcoded-secret-pattern
+    pattern-regex: '(?i)(password|passwd|secret|api[_-]?key|token)\s*[=:]\s*"[^\"]{6,}"'
+    message: "Potential hardcoded secret detected. Move secrets to secure configuration."
+    severity: ERROR
+    languages: [java, ts, js]
+
+  - id: angular-unsafe-innerhtml
+    pattern: |
+      [innerHTML]="$X"
+    message: "Avoid unsafe [innerHTML] usage without sanitization."
+    severity: WARNING
+    languages: [html]

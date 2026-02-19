@@ -1,0 +1,33 @@
+{
+  "name": "stock-brokerage-quality",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Project-level quality checks for stock-brokerage",
+  "scripts": {
+    "setup": "npm install && npx playwright install",
+    "quality:backend:test": "mvn -f ../pom.xml -DskipTests=false test",
+    "quality:backend:checkstyle": "mvn -f ../pom.xml org.apache.maven.plugins:maven-checkstyle-plugin:3.3.1:check -Dcheckstyle.config.location=quality/config/checkstyle.xml -Dcheckstyle.failOnViolation=true",
+    "quality:backend:pmd": "mvn -f ../pom.xml org.apache.maven.plugins:maven-pmd-plugin:3.21.2:check -Dpmd.rulesets=quality/config/pmd-ruleset.xml -Dpmd.targetJdk=17",
+    "quality:backend": "npm-run-all -s quality:backend:test quality:backend:checkstyle quality:backend:pmd",
+    "quality:frontend:build": "npm --prefix ../frontend run build",
+    "quality:frontend:types": "npx tsc -p ../frontend/tsconfig.app.json --noEmit",
+    "quality:frontend": "npm-run-all -s quality:frontend:build quality:frontend:types",
+    "security:static": "%APPDATA%\\Python\\Python313\\Scripts\\pysemgrep.exe scan --config ./static-security/semgrep.yml ../src ../frontend/src",
+    "security:deps:owasp": "mvn -f ../pom.xml org.owasp:dependency-check-maven:check -Dformat=HTML -DoutputDirectory=quality/reports/dependency-check",
+    "security:deps:npm": "npm audit --prefix ../frontend --audit-level=moderate",
+    "security:deps": "npm-run-all -s security:deps:owasp security:deps:npm",
+    "frontend:test:postbuild": "npm --prefix ../frontend run build && playwright test --config ./functional/frontend/playwright.config.ts",
+    "frontend:perf": "lhci autorun --config ./performance/frontend/lighthouserc.json",
+    "api:functional": "tools\\k6\\k6-v1.6.1-windows-amd64\\k6.exe run ./functional/api/api-functional.k6.js",
+    "api:perf:smoke": "tools\\k6\\k6-v1.6.1-windows-amd64\\k6.exe run ./performance/api/api-smoke.k6.js",
+    "api:perf:load": "tools\\k6\\k6-v1.6.1-windows-amd64\\k6.exe run ./performance/api/api-load.k6.js",
+    "quality:all": "npm-run-all -s quality:backend quality:frontend security:static security:deps frontend:test:postbuild api:functional api:perf:smoke"
+  },
+  "devDependencies": {
+    "@lhci/cli": "^0.14.0",
+    "@playwright/test": "^1.51.0",
+    "http-server": "^14.1.1",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.7.3"
+  }
+}
