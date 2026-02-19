@@ -15,7 +15,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/trades")
 @RequiredArgsConstructor
-@Tag(name = "Trade Management (Admin)", description = "Admin APIs for viewing and managing all trades")
+@Tag(name = "Admin – Trades", description = "Admin: full trade history and audit logs")
 public class TradeAdminController {
     
     private final TradeRepository tradeRepository;

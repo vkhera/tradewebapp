@@ -18,7 +18,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/rules")
 @RequiredArgsConstructor
-@Tag(name = "Rule Management (Admin)", description = "Admin APIs for managing business rules")
+@Tag(name = "Admin – Rules", description = "Admin: business rule CRUD (fraud / cash validation)")
 public class RuleAdminController {
     
     private final RuleService ruleService;

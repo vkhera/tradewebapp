@@ -19,7 +19,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/clients")
 @RequiredArgsConstructor
-@Tag(name = "Client Management (Admin)", description = "Admin APIs for managing clients")
+@Tag(name = "Admin – Clients", description = "Admin: client management and audit logs")
 public class ClientAdminController {
     
     private final ClientService clientService;

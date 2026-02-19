@@ -17,7 +17,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/clients")
 @RequiredArgsConstructor
-@Tag(name = "Client Management", description = "APIs for managing client accounts")
+@Tag(name = "Clients", description = "Client registration and profile management")
 public class ClientController {
     
     private final ClientService clientService;
