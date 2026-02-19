@@ -1,0 +1,81 @@
+# throttle-config.yaml — classpath FALLBACK copy
+# ─────────────────────────────────────────────────────────────────────────────
+# This file is bundled in the JAR and used ONLY if the external file at
+#   config/throttle-config.yaml   (relative to the working directory)
+# does not exist.
+# ─────────────────────────────────────────────────────────────────────────────
+# To make live changes, edit   config/throttle-config.yaml   in the project root.
+# Changes are picked up within 60 seconds without restarting the application.
+# ─────────────────────────────────────────────────────────────────────────────
+
+defaults:
+  rate-limiter:
+    enabled: true
+    limit-for-period: 1
+    limit-refresh-period-ms: 1000
+    timeout-duration-ms: 0
+  circuit-breaker:
+    enabled: true
+    failure-rate-threshold: 50.0
+    slow-call-rate-threshold: 80.0
+    slow-call-duration-threshold-ms: 2000
+    sliding-window-size: 10
+    permitted-calls-in-half-open: 3
+    wait-duration-in-open-ms: 30000
+
+services:
+  TradeService:
+    rate-limiter:
+      limit-for-period: 5
+  AccountService:
+    rate-limiter:
+      limit-for-period: 5
+  PortfolioService:
+    rate-limiter:
+      limit-for-period: 10
+  StockPriceService:
+    rate-limiter:
+      limit-for-period: 10
+  StockMarketDataService:
+    rate-limiter:
+      limit-for-period: 5
+  StockPricePredictionService:
+    rate-limiter:
+      limit-for-period: 2
+    circuit-breaker:
+      failure-rate-threshold: 30.0
+  TrendAnalysisService:
+    rate-limiter:
+      limit-for-period: 3
+  FraudDetectionService:
+    rate-limiter:
+      limit-for-period: 10
+  RuleEngineService:
+    rate-limiter:
+      limit-for-period: 10
+  AuthService:
+    rate-limiter:
+      limit-for-period: 3
+  LimitOrderScheduler:
+    rate-limiter:
+      enabled: false
+    circuit-breaker:
+      enabled: false
+  StockPricePredictionBatchService:
+    rate-limiter:
+      enabled: false
+    circuit-breaker:
+      enabled: false
+  TrendAnalysisBatchService:
+    rate-limiter:
+      enabled: false
+    circuit-breaker:
+      enabled: false
+  AuditService:
+    rate-limiter:
+      enabled: false
+    circuit-breaker:
+      enabled: false
+  ReconciliationService:
+    rate-limiter:
+      limit-for-period: 1

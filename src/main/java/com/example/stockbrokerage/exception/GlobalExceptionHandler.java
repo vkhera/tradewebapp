@@ -16,6 +16,17 @@ import java.util.Map;
 @Slf4j
 public class GlobalExceptionHandler {
     
+    @ExceptionHandler(RequestThrottledException.class)
+    public ResponseEntity<ErrorResponse> handleThrottled(RequestThrottledException ex) {
+        log.warn("Request throttled: {}", ex.getMessage());
+        ErrorResponse error = new ErrorResponse(
+            HttpStatus.TOO_MANY_REQUESTS.value(),
+            ex.getMessage(),
+            LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(error);
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {
         log.error("Runtime exception occurred", ex);

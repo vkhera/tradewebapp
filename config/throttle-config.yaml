@@ -1,0 +1,113 @@
+# ============================================================
+# throttle-config.yaml — Resilience4j rate-limiter + circuit-breaker
+# ============================================================
+# This file is hot-reloaded every 60 seconds.
+# Changes take effect within one minute — no restart needed.
+#
+# Location resolution order:
+#   1. config/throttle-config.yaml  (next to the JAR / project root when using mvn spring-boot:run)
+#   2. classpath:throttle-config.yaml  (bundled in the JAR — this file is the fallback copy)
+#
+# To override the file path, set:
+#   throttle.config-path=<absolute-or-relative-path>
+# in application.yml or as a JVM argument.
+# ============================================================
+
+defaults:
+  rate-limiter:
+    enabled: true
+    limit-for-period: 1          # max calls allowed within the refresh window
+    limit-refresh-period-ms: 1000 # window size in ms  →  1 call / 1000 ms = 1 TPS globally
+    timeout-duration-ms: 0        # 0 = fail immediately if no permit available (no queuing)
+
+  circuit-breaker:
+    enabled: true
+    failure-rate-threshold: 50.0         # % of calls that must fail to OPEN the circuit
+    slow-call-rate-threshold: 80.0       # % of calls that must be slow to OPEN the circuit
+    slow-call-duration-threshold-ms: 2000 # calls taking > 2 s are counted as slow
+    sliding-window-size: 10              # evaluate failure rate over the last N calls
+    permitted-calls-in-half-open: 3      # test calls allowed when circuit is HALF_OPEN
+    wait-duration-in-open-ms: 30000      # ms the circuit stays OPEN before attempting recovery
+
+# ── Per-service overrides ─────────────────────────────────────────────────────
+# Any field omitted inside a block inherits from the defaults above.
+# Set an entire sub-block to null or omit it to use the global default.
+# To disable resilience for a service entirely, set both enabled flags to false.
+#
+# Service names must match the Spring bean's simple class name exactly,
+# e.g. "TradeService", "PortfolioService", "StockPricePredictionService".
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  TradeService:
+    rate-limiter:
+      limit-for-period: 5          # 5 TPS — trades need a bit more headroom
+
+  AccountService:
+    rate-limiter:
+      limit-for-period: 5
+
+  PortfolioService:
+    rate-limiter:
+      limit-for-period: 10         # portfolio reads are cheap; allow higher throughput
+
+  StockPriceService:
+    rate-limiter:
+      limit-for-period: 10
+
+  StockMarketDataService:
+    rate-limiter:
+      limit-for-period: 5
+
+  StockPricePredictionService:
+    rate-limiter:
+      limit-for-period: 2          # heavy computation — keep tight
+    circuit-breaker:
+      failure-rate-threshold: 30.0 # trip faster for the expensive prediction path
+
+  TrendAnalysisService:
+    rate-limiter:
+      limit-for-period: 3
+
+  FraudDetectionService:
+    rate-limiter:
+      limit-for-period: 10         # runs inline with trades; must keep up
+
+  RuleEngineService:
+    rate-limiter:
+      limit-for-period: 10
+
+  AuthService:
+    rate-limiter:
+      limit-for-period: 3          # mild brute-force protection
+
+  # Schedulers run on their own timer — no request-level throttle needed
+  LimitOrderScheduler:
+    rate-limiter:
+      enabled: false
+    circuit-breaker:
+      enabled: false
+
+  StockPricePredictionBatchService:
+    rate-limiter:
+      enabled: false
+    circuit-breaker:
+      enabled: false
+
+  TrendAnalysisBatchService:
+    rate-limiter:
+      enabled: false
+    circuit-breaker:
+      enabled: false
+
+  # Internal helpers — disable to avoid counting them as separate throttled units
+  AuditService:
+    rate-limiter:
+      enabled: false
+    circuit-breaker:
+      enabled: false
+
+  ReconciliationService:
+    rate-limiter:
+      limit-for-period: 1
