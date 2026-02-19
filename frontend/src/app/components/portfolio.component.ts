@@ -1,4 +1,4 @@
-import { Component, OnInit, Inject, PLATFORM_ID } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, PLATFORM_ID, HostListener } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { ApiService } from '../services/api.service';
 
@@ -62,81 +62,17 @@ import { ApiService } from '../services/api.service';
         <tbody>
           <tr *ngFor="let holding of portfolio">
 
-            <!-- ── Symbol cell with hover prediction tooltip ── -->
+            <!-- ── Symbol cell with click Predictions button ── -->
             <td class="symbol-cell">
-              <div class="symbol-wrapper"
-                   (mouseenter)="onSymbolHover(holding)"
-                   (mouseleave)="onSymbolLeave(holding)">
               <span class="symbol-ticker">{{ holding.symbol }}</span>
-              <span class="hint-icon" title="Hover for price predictions">📈</span>
-
-              <!-- Prediction tooltip -->
-              <div class="prediction-tooltip" *ngIf="holding.showTooltip">
-                <div class="tooltip-header">
-                  <span class="tooltip-title">{{ holding.symbol }} – 8h Price Forecasts</span>
-                  <span class="tooltip-current">Now: <strong>\${{ holding.currentPrice | number:'1.2-2' }}</strong></span>
-                </div>
-
-                <div *ngIf="holding.predictionLoading" class="tooltip-loading">
-                  Fetching predictions…
-                </div>
-
-                <table *ngIf="!holding.predictionLoading && holding.predictions?.length" class="pred-table">
-                  <thead>
-                    <tr>
-                      <th>Hour</th>
-                      <th>Predicted</th>
-                      <th>Δ %</th>
-                      <th>Confidence</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr *ngFor="let p of holding.predictions"
-                        [class.pred-up]="p.changePercent > 0"
-                        [class.pred-down]="p.changePercent < 0">
-                      <td class="pred-hour">{{ p.hourLabel }}</td>
-                      <td class="pred-price">\${{ p.predictedPrice | number:'1.2-2' }}</td>
-                      <td class="pred-change">
-                        <span [class.up]="p.changePercent > 0" [class.down]="p.changePercent < 0">
-                          {{ p.changePercent > 0 ? '+' : '' }}{{ p.changePercent | number:'1.2-2' }}%
-                        </span>
-                      </td>
-                      <td class="pred-conf">
-                        <div class="conf-bar">
-                          <div class="conf-fill" [style.width.%]="p.confidencePct"
-                               [class.conf-high]="p.confidencePct >= 70"
-                               [class.conf-mid]="p.confidencePct >= 40 && p.confidencePct < 70"
-                               [class.conf-low]="p.confidencePct < 40"></div>
-                        </div>
-                        <span class="conf-label">{{ p.confidencePct | number:'1.0-0' }}%</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                <div *ngIf="!holding.predictionLoading && !holding.predictions?.length" class="tooltip-no-data">
-                  No prediction data available yet.
-                </div>
-
-                <!-- Technique weights mini-bar -->
-                <div *ngIf="holding.techniqueWeights" class="weights-section">
-                  <div class="weights-title">Technique Weights</div>
-                  <div class="weights-list">
-                    <div *ngFor="let w of holding.techniqueWeights" class="weight-row">
-                      <span class="weight-name">{{ w.name }}</span>
-                      <div class="weight-bar-bg">
-                        <div class="weight-bar-fill" [style.width.%]="w.pct"></div>
-                      </div>
-                      <span class="weight-pct">{{ w.pct | number:'1.0-0' }}%</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="tooltip-footer" *ngIf="holding.predictedAt">
-                  Updated: {{ holding.predictedAt }} {{ holding.predictionCached ? '(cached)' : '(fresh)' }}
-                </div>
-              </div>
-              </div><!-- /symbol-wrapper -->
+              <button class="pred-btn"
+                      [class.pred-btn--loading]="holding.predictionLoading"
+                      [class.pred-btn--open]="holding.showTooltip && !holding.predictionLoading"
+                      (click)="togglePredictions(holding, $event)"
+                      [attr.data-symbol]="holding.symbol">
+                <span *ngIf="!holding.predictionLoading">📊 Predictions</span>
+                <span *ngIf="holding.predictionLoading" class="btn-loading-text">⏳ Loading…</span>
+              </button>
             </td>
 
             <td class="trend-cell">
@@ -174,6 +110,76 @@ import { ApiService } from '../services/api.service';
           </tr>
         </tfoot>
       </table>
+
+      <!-- ── Fixed-position prediction popup (rendered outside table flow) ── -->
+      <div *ngIf="activeHolding && activeHolding.showTooltip"
+           class="pred-popup-overlay"
+           [style.top.px]="popupTop"
+           [style.left.px]="popupLeft"
+           (click)="$event.stopPropagation()">
+
+        <div class="tooltip-header">
+          <span class="tooltip-title">{{ activeHolding.symbol }} – 8h Price Forecasts</span>
+          <span class="tooltip-current">Now: <strong>\${{ activeHolding.currentPrice | number:'1.2-2' }}</strong></span>
+          <button class="popup-close" (click)="closePopup()" title="Close">&times;</button>
+        </div>
+
+        <div *ngIf="activeHolding.predictionLoading" class="tooltip-loading">
+          Fetching predictions…
+        </div>
+
+        <table *ngIf="!activeHolding.predictionLoading && activeHolding.predictions?.length" class="pred-table">
+          <thead>
+            <tr>
+              <th>Hour</th>
+              <th>Predicted</th>
+              <th>Δ %</th>
+              <th>Confidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of activeHolding.predictions"
+                [class.pred-up]="p.changePercent > 0"
+                [class.pred-down]="p.changePercent < 0">
+              <td class="pred-hour">{{ p.hourLabel }}</td>
+              <td class="pred-price">\${{ p.predictedPrice | number:'1.2-2' }}</td>
+              <td class="pred-change">
+                <span [class.up]="p.changePercent > 0" [class.down]="p.changePercent < 0">
+                  {{ p.changePercent > 0 ? '+' : '' }}{{ p.changePercent | number:'1.2-2' }}%
+                </span>
+              </td>
+              <td class="pred-conf">
+                <div class="conf-bar">
+                  <div class="conf-fill" [style.width.%]="p.confidencePct"
+                       [class.conf-high]="p.confidencePct >= 70"
+                       [class.conf-mid]="p.confidencePct >= 40 && p.confidencePct < 70"
+                       [class.conf-low]="p.confidencePct < 40"></div>
+                </div>
+                <span class="conf-label">{{ p.confidencePct | number:'1.0-0' }}%</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div *ngIf="!activeHolding.predictionLoading && !activeHolding.predictions?.length" class="tooltip-no-data">
+          No prediction data available yet.
+        </div>
+
+        <div *ngIf="activeHolding.techniqueWeights" class="weights-section">
+          <div class="weights-title">Technique Weights</div>
+          <div class="weights-list">
+            <div *ngFor="let w of activeHolding.techniqueWeights" class="weight-row">
+              <span class="weight-name">{{ w.name }}</span>
+              <div class="weight-bar-bg"><div class="weight-bar-fill" [style.width.%]="w.pct"></div></div>
+              <span class="weight-pct">{{ w.pct | number:'1.0-0' }}%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tooltip-footer" *ngIf="activeHolding.predictedAt">
+          Updated: {{ activeHolding.predictedAt }} {{ activeHolding.predictionCached ? '(cached)' : '(fresh)' }}
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -221,55 +227,83 @@ import { ApiService } from '../services/api.service';
     .symbol-cell {
       font-weight: 600;
       white-space: nowrap;
-    }
-    .symbol-wrapper {
-      position: relative;
-      display: inline-block;
-      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
     .symbol-ticker {
       color: #667eea;
-      cursor: pointer;
-      border-bottom: 1px dashed #667eea;
-    }
-    .hint-icon {
-      margin-left: 4px;
-      font-size: 0.8rem;
-      opacity: 0.6;
-      cursor: help;
+      font-weight: 700;
+      font-size: 0.95rem;
     }
 
-    /* ── Prediction tooltip ── */
-    .prediction-tooltip {
-      position: absolute;
-      top: 50%;
-      left: calc(100% + 12px);
-      transform: translateY(-20%);
+    /* ── Predictions button ── */
+    .pred-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 1.5px solid #667eea;
+      border-radius: 20px;
+      background: transparent;
+      color: #667eea;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+      line-height: 1.6;
+      white-space: nowrap;
+    }
+    .pred-btn:hover {
+      background: #667eea;
+      color: #fff;
+    }
+    .pred-btn--loading {
+      background: #f59e0b !important;
+      border-color: #f59e0b !important;
+      color: #fff !important;
+      cursor: wait;
+    }
+    .pred-btn--open {
+      background: #10b981 !important;
+      border-color: #10b981 !important;
+      color: #fff !important;
+    }
+    .btn-loading-text { letter-spacing: 0.02em; }
+
+    /* ── Prediction popup (fixed overlay) ── */
+    .pred-popup-overlay {
+      position: fixed;
       z-index: 9999;
-      width: 420px;
+      width: 460px;
       background: #1e293b;
       color: #e2e8f0;
-      border-radius: 10px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+      border-radius: 12px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.55);
       font-size: 0.82rem;
-      padding: 0;
       overflow: hidden;
-      animation: tooltipFadeIn 0.15s ease;
+      animation: popupFadeIn 0.18s ease;
     }
-    @keyframes tooltipFadeIn {
-      from { opacity: 0; transform: translateX(-4px); }
-      to   { opacity: 1; transform: translateX(0); }
+    @keyframes popupFadeIn {
+      from { opacity: 0; transform: scale(0.97) translateY(4px); }
+      to   { opacity: 1; transform: scale(1)   translateY(0); }
     }
     .tooltip-header {
       display: flex; justify-content: space-between; align-items: center;
-      background: #334155; padding: 10px 14px;
+      background: #334155; padding: 11px 14px;
     }
     .tooltip-title { font-weight: 700; font-size: 0.92rem; color: #f8fafc; }
     .tooltip-current { color: #94a3b8; font-size: 0.82rem; }
     .tooltip-current strong { color: #38bdf8; }
+    .popup-close {
+      background: none; border: none; color: #94a3b8;
+      font-size: 1.1rem; cursor: pointer; padding: 0 0 0 10px;
+      line-height: 1;
+    }
+    .popup-close:hover { color: #f8fafc; }
 
     .tooltip-loading, .tooltip-no-data {
-      padding: 20px; text-align: center; color: #94a3b8;
+      padding: 24px; text-align: center; color: #94a3b8;
     }
 
     /* ── Prediction table inside tooltip ── */
@@ -335,16 +369,26 @@ import { ApiService } from '../services/api.service';
     .total-row td { border-bottom: none; }
   `]
 })
-export class PortfolioComponent implements OnInit {
+export class PortfolioComponent implements OnInit, OnDestroy {
   portfolio: any[] = [];
   summary: any = null;
   loading = true;
   totalValue = 0;
 
+  // Active popup state
+  activeHolding: any = null;
+  popupTop  = 0;
+  popupLeft = 0;
+
   constructor(
     private apiService: ApiService,
     @Inject(PLATFORM_ID) private platformId: Object
   ) {}
+
+  @HostListener('document:click')
+  onDocumentClick() {
+    this.closePopup();
+  }
 
   ngOnInit() {
     if (isPlatformBrowser(this.platformId)) {
@@ -353,6 +397,10 @@ export class PortfolioComponent implements OnInit {
         this.loadPortfolio(parseInt(clientId));
       }
     }
+  }
+
+  ngOnDestroy() {
+    this.closePopup();
   }
 
   loadPortfolio(clientId: number) {
@@ -386,12 +434,34 @@ export class PortfolioComponent implements OnInit {
     });
   }
 
-  // ── Hover handlers ──────────────────────────────────────────────────────────
+  // ── Predictions button toggle ────────────────────────────────────────────────
 
-  onSymbolHover(holding: any) {
+  togglePredictions(holding: any, event: MouseEvent) {
+    event.stopPropagation();
+
+    // If clicking the already-open holding → close
+    if (this.activeHolding === holding && holding.showTooltip) {
+      this.closePopup();
+      return;
+    }
+
+    // Close any previously open popup
+    if (this.activeHolding) {
+      this.activeHolding.showTooltip = false;
+    }
+
+    // Position popup below/right of the clicked button
+    const btn = event.currentTarget as HTMLElement;
+    const rect = btn.getBoundingClientRect();
+    const popupWidth = 460;
+    const fitsRight  = rect.right + 8 + popupWidth <= window.innerWidth;
+    this.popupLeft = Math.max(8, fitsRight ? rect.right + 8 : rect.left - popupWidth - 8);
+    this.popupTop  = Math.min(rect.bottom + window.scrollY + 4, window.scrollY + window.innerHeight - 440);
+
+    this.activeHolding = holding;
     holding.showTooltip = true;
 
-    // Lazy-load predictions on first hover
+    // Load predictions if not yet fetched
     if (holding.predictionsLoaded) return;
 
     holding.predictionLoading = true;
@@ -405,7 +475,6 @@ export class PortfolioComponent implements OnInit {
           : '';
 
         const currentPrice: number = data.currentPrice || holding.currentPrice;
-
         holding.predictions = (data.hourlyPredictions || []).map((p: any) => {
           const predicted: number = p.predictedPrice;
           const change = currentPrice > 0
@@ -419,7 +488,6 @@ export class PortfolioComponent implements OnInit {
           };
         });
 
-        // Build technique weights array for mini-bar display
         if (data.techniqueWeights) {
           holding.techniqueWeights = Object.entries(data.techniqueWeights).map(([name, w]: any) => ({
             name: name.replace(/_/g, ' '),
@@ -436,8 +504,11 @@ export class PortfolioComponent implements OnInit {
     });
   }
 
-  onSymbolLeave(holding: any) {
-    holding.showTooltip = false;
+  closePopup() {
+    if (this.activeHolding) {
+      this.activeHolding.showTooltip = false;
+    }
+    this.activeHolding = null;
   }
 
   // ── Utilities ───────────────────────────────────────────────────────────────
