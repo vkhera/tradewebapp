@@ -23,11 +23,14 @@ import java.util.stream.Collectors;
  * with adaptive per‑stock technique weights that improve over time.
  *
  * Techniques:
- *  1. Linear Regression   – OLS trend line over last 40h → extrapolate
+ *  1. Linear Regression   – OLS trend line over last 480 bars (40h at 5m) → extrapolate
  *  2. EMA Extrapolation   – Double EMA captures level + trend component
  *  3. Momentum            – Rate-of-change projected linearly
- *  4. Mean Reversion      – Bollinger-band pull toward 20h mean
+ *  4. Mean Reversion      – Bollinger-band pull toward 240-bar (20h) mean
  *  5. Holt-Winters        – Double exponential smoothing (level + trend)
+ *
+ * Data: 5-minute bars from Yahoo Finance (interval=5m&range=60d).
+ * Each hourly prediction = 12 bars ahead.
  */
 @Service
 @RequiredArgsConstructor
@@ -36,7 +39,10 @@ public class StockPricePredictionService {
 
     // ------------------------------------------------------------------ constants
     private static final String DATA_DIR        = "stock_predictions";
-    private static final int    HISTORY_HOURS   = 40;
+    /** Number of 5-min bars to use as history (40 hours × 12 bars/hour). */
+    private static final int    HISTORY_BARS    = 480;
+    /** 5-minute bars per hour – used to convert hourly predictions to bar steps. */
+    private static final int    BARS_PER_HOUR   = 12;
     private static final int    PREDICT_HOURS   = 8;
     private static final DateTimeFormatter FMT  = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -89,7 +95,7 @@ public class StockPricePredictionService {
         log.info("Calculating price predictions for {}", symbol);
         ensureDataDir();
 
-        List<BigDecimal> history = marketDataService.getHourlyPrices(symbol, HISTORY_HOURS);
+        List<BigDecimal> history = marketDataService.getPrices(symbol, HISTORY_BARS);
         if (history.size() < 5) {
             log.warn("Insufficient history for {} ({} points)", symbol, history.size());
             return buildEmptyResponse(symbol);
@@ -105,13 +111,13 @@ public class StockPricePredictionService {
         for (int h = 1; h <= PREDICT_HOURS; h++) {
             LocalDateTime targetHour = baseHour.plusHours(h);
 
-            // Run each technique
+            // Run each technique; convert hours to 5-min bar steps
             Map<String, BigDecimal> breakdown = new LinkedHashMap<>();
-            breakdown.put(TECH_LINEAR_REGRESSION, linearRegression(history, h));
-            breakdown.put(TECH_EMA_EXTRAPOLATION, emaExtrapolation(history, h));
-            breakdown.put(TECH_MOMENTUM,          momentum(history, h));
-            breakdown.put(TECH_MEAN_REVERSION,    meanReversion(history, h));
-            breakdown.put(TECH_HOLT_WINTERS,      holtWinters(history, h));
+            breakdown.put(TECH_LINEAR_REGRESSION, linearRegression(history, h * BARS_PER_HOUR));
+            breakdown.put(TECH_EMA_EXTRAPOLATION, emaExtrapolation(history, h * BARS_PER_HOUR));
+            breakdown.put(TECH_MOMENTUM,          momentum(history, h * BARS_PER_HOUR));
+            breakdown.put(TECH_MEAN_REVERSION,    meanReversion(history, h * BARS_PER_HOUR));
+            breakdown.put(TECH_HOLT_WINTERS,      holtWinters(history, h * BARS_PER_HOUR));
 
             // Weighted ensemble
             BigDecimal weightedPrice = weightedMean(breakdown, weights);
@@ -219,9 +225,10 @@ public class StockPricePredictionService {
         return toPrice(predicted);
     }
 
-    /** Double EMA: captures both level and trend, projects h steps. */
+    /** Double EMA: captures both level and trend, projects h bars ahead.
+     *  Span = 144 bars (12-hour EMA at 5-min resolution). */
     private BigDecimal emaExtrapolation(List<BigDecimal> prices, int h) {
-        double alpha = 2.0 / (Math.min(prices.size(), 12) + 1);
+        double alpha = 2.0 / (Math.min(prices.size(), 144) + 1);
         double ema1 = prices.getFirst().doubleValue();
         double ema2 = ema1;
         for (BigDecimal p : prices) {
@@ -233,9 +240,9 @@ public class StockPricePredictionService {
         return toPrice(a + b * h);
     }
 
-    /** Momentum: rate of change over last 5h, projected linearly. */
+    /** Momentum: rate of change over last 60 bars (5h), projected linearly. */
     private BigDecimal momentum(List<BigDecimal> prices, int h) {
-        int lookback = Math.min(5, prices.size() - 1);
+        int lookback = Math.min(60, prices.size() - 1); // 60 bars = 5 hours at 5-min resolution
         if (lookback <= 0) return prices.getLast();
         double old = prices.get(prices.size() - 1 - lookback).doubleValue();
         double now = prices.getLast().doubleValue();
@@ -243,15 +250,16 @@ public class StockPricePredictionService {
         return toPrice(now + roc * h);
     }
 
-    /** Mean reversion: pulls predicted price toward 20h Bollinger-band center. */
+    /** Mean reversion: pulls predicted price toward 240-bar (20h) Bollinger-band center.
+     *  Decay: half-life = 72 bars (6h), so λ = ln(2)/72 ≈ 0.00962. */
     private BigDecimal meanReversion(List<BigDecimal> prices, int h) {
-        int window = Math.min(20, prices.size());
+        int window = Math.min(240, prices.size()); // 240 bars = 20 hours at 5-min resolution
         List<BigDecimal> slice = prices.subList(prices.size() - window, prices.size());
         double mean   = slice.stream().mapToDouble(BigDecimal::doubleValue).average().orElse(0);
         double now    = prices.getLast().doubleValue();
         double dev    = now - mean;
-        // Exponential decay toward mean; half-life ≈ 6 hours
-        double decay  = Math.exp(-0.115 * h);
+        // Exponential decay toward mean; half-life ≈ 72 bars (6h); λ = ln(2)/72
+        double decay  = Math.exp(-0.00962 * h);
         return toPrice(mean + dev * decay);
     }
 

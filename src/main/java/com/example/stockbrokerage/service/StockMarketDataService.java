@@ -18,7 +18,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * Fetches real historical hourly stock price data from Yahoo Finance (free, no API key).
+ * Fetches real historical 5-minute stock price data from Yahoo Finance (free, no API key).
+ * Uses interval=5m&range=60d – up to ~4700 bars with no API key required.
  * Falls back to CSV cache if the API is unavailable.
  */
 @Service
@@ -32,16 +33,16 @@ public class StockMarketDataService {
     private final RestTemplate restTemplate = new RestTemplate();
 
     /**
-     * Returns the last N hours of closing prices for the symbol.
+     * Returns the last N 5-minute bars of closing prices for the symbol.
      * Ordered oldest -> newest.
      */
-    public List<BigDecimal> getHourlyPrices(String symbol, int hours) {
+    public List<BigDecimal> getPrices(String symbol, int bars) {
         ensureDataDir();
 
-        // Try to load from cache first (less than 15 minutes old)
-        List<BigDecimal> cached = loadFromCsvCache(symbol, hours);
+        // Try to load from cache first (less than 5 minutes old)
+        List<BigDecimal> cached = loadFromCsvCache(symbol, bars);
         if (!cached.isEmpty()) {
-            log.debug("Loaded {} hourly prices for {} from cache", cached.size(), symbol);
+            log.debug("Loaded {} 5-min prices for {} from cache", cached.size(), symbol);
             return cached;
         }
 
@@ -50,7 +51,7 @@ public class StockMarketDataService {
 
         if (prices.isEmpty()) {
             log.warn("Yahoo Finance returned no data for {}, using fallback", symbol);
-            prices = generateRealisticFallback(symbol, hours);
+            prices = generateRealisticFallback(symbol, bars);
         }
 
         // Persist to CSV cache
@@ -58,14 +59,14 @@ public class StockMarketDataService {
             saveToCsvCache(symbol, prices);
         }
 
-        return prices.size() > hours ? prices.subList(prices.size() - hours, prices.size()) : prices;
+        return prices.size() > bars ? prices.subList(prices.size() - bars, prices.size()) : prices;
     }
 
     /**
      * Returns the current (most recent) price for the symbol.
      */
     public BigDecimal getCurrentPrice(String symbol) {
-        List<BigDecimal> prices = getHourlyPrices(symbol, 1);
+        List<BigDecimal> prices = getPrices(symbol, 1);
         if (!prices.isEmpty()) {
             return prices.getLast();
         }
@@ -78,7 +79,8 @@ public class StockMarketDataService {
 
     private List<BigDecimal> fetchFromYahooFinance(String symbol) {
         try {
-            String url = "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1h&range=10d".formatted(symbol);
+            // 5-min bars, 60-day range → ~4680 bars (free, no API key)
+            String url = "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=5m&range=60d".formatted(symbol);
 
             HttpHeaders headers = new HttpHeaders();
             headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
@@ -121,7 +123,7 @@ public class StockMarketDataService {
                 }
             }
 
-            log.info("Fetched {} hourly prices for {} from Yahoo Finance", prices.size(), symbol);
+            log.info("Fetched {} 5-min bars for {} from Yahoo Finance", prices.size(), symbol);
         } catch (Exception e) {
             log.error("Error parsing Yahoo Finance response for {}: {}", symbol, e.getMessage());
         }
@@ -132,16 +134,16 @@ public class StockMarketDataService {
     // CSV Cache
     // -------------------------------------------------------------------------
 
-    private List<BigDecimal> loadFromCsvCache(String symbol, int hours) {
+    private List<BigDecimal> loadFromCsvCache(String symbol, int bars) {
         Path csvPath = Paths.get(DATA_DIR, symbol + "_prices.csv");
         if (!Files.exists(csvPath)) {
             return List.of();
         }
 
         try {
-            // Check cache freshness - only use if < 15 min old
+            // Check cache freshness - only use if < 5 min old (matches bar interval)
             FileTime lastModified = Files.getLastModifiedTime(csvPath);
-            Instant cutoff = Instant.now().minusSeconds(900); // 15 minutes
+            Instant cutoff = Instant.now().minusSeconds(300); // 5 minutes
             if (lastModified.toInstant().isBefore(cutoff)) {
                 return List.of(); // stale, force refresh
             }
@@ -158,7 +160,7 @@ public class StockMarketDataService {
                     }
                 }
             }
-            return prices.size() > hours ? prices.subList(prices.size() - hours, prices.size()) : prices;
+            return prices.size() > bars ? prices.subList(prices.size() - bars, prices.size()) : prices;
 
         } catch (Exception e) {
             log.warn("Error loading CSV cache for {}: {}", symbol, e.getMessage());
@@ -170,13 +172,15 @@ public class StockMarketDataService {
         Path csvPath = Paths.get(DATA_DIR, symbol + "_prices.csv");
         try (PrintWriter writer = new PrintWriter(new FileWriter(csvPath.toFile()))) {
             writer.println("Timestamp,ClosePrice");
-            // Generate approximate hourly timestamps going back
-            LocalDateTime now = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0);
+            // Generate approximate 5-min timestamps going back
+            LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
+            int floorMin = now.getMinute() - (now.getMinute() % 5);
+            now = now.withMinute(floorMin);
             for (int i = 0; i < prices.size(); i++) {
-                LocalDateTime ts = now.minusHours(prices.size() - 1 - i);
+                LocalDateTime ts = now.minusMinutes(5L * (prices.size() - 1 - i));
                 writer.printf("%s,%s%n", ts.format(TS_FMT), prices.get(i).toPlainString());
             }
-            log.debug("Saved {} prices to CSV cache for {}", prices.size(), symbol);
+            log.debug("Saved {} 5-min bars to CSV cache for {}", prices.size(), symbol);
         } catch (IOException e) {
             log.error("Error saving price CSV cache for {}: {}", symbol, e.getMessage());
         }
@@ -186,14 +190,14 @@ public class StockMarketDataService {
     // Realistic fallback: random walk from last known price
     // -------------------------------------------------------------------------
 
-    private List<BigDecimal> generateRealisticFallback(String symbol, int hours) {
-        log.warn("Generating synthetic price data for {} (API unavailable)", symbol);
+    private List<BigDecimal> generateRealisticFallback(String symbol, int bars) {
+        log.warn("Generating synthetic 5-min price data for {} (API unavailable)", symbol);
         Random rng = new Random(symbol.hashCode());
         BigDecimal price = BigDecimal.valueOf(50 + rng.nextInt(250));
-        double volatility = 0.008 + rng.nextDouble() * 0.012; // 0.8-2% hourly vol
+        double volatility = 0.001 + rng.nextDouble() * 0.002; // 0.1-0.3% per 5-min bar
 
         List<BigDecimal> prices = new ArrayList<>();
-        for (int i = 0; i < hours; i++) {
+        for (int i = 0; i < bars; i++) {
             double change = (rng.nextGaussian() * volatility);
             price = price.multiply(BigDecimal.valueOf(1 + change)).setScale(4, RoundingMode.HALF_UP);
             if (price.compareTo(BigDecimal.ONE) < 0) price = BigDecimal.valueOf(1.0);
