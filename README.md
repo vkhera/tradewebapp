@@ -15,6 +15,9 @@ A low-latency stock brokerage web application built with Spring Boot backend and
 - **Audit Logging**: Complete event logging for all system activities
 - **High-Speed Database**: PostgreSQL with optimized connection pooling
 - **Caching**: Redis-based caching for improved performance
+- **Rate Limiting & Circuit Breaking**: Resilience4j throttle with hot-reloadable YAML config; per-service TPS overrides and circuit-breaker protection (60-second auto-reload, 1 TPS global default)
+- **Price Prediction Popup**: Click-based fixed-position popup showing 8-hour hourly forecasts for each portfolio holding
+- **Auth Guard**: Angular route protection redirecting unauthenticated users to login
 
 ## Quality Checks Toolkit
 
@@ -31,7 +34,7 @@ It includes:
 ## Technology Stack
 
 ### Backend
-- Java 23 (compatible with JDK 17+)
+- Java 21 (JDK 21.0.8, compatible with 17+)
 - Spring Boot 3.2.1
 - Spring Data JPA
 - Spring Security
@@ -78,6 +81,11 @@ graph TB
             CAC[ClientAdminController]
             TAC[TradeAdminController]
             RAC[RuleAdminController]
+            RSC[ResilienceStatusController]
+        end
+
+        subgraph RESIL["Resilience Layer"]
+            DTR[DynamicThrottleRegistry\nhot-reload every 60s\nconfig/throttle-config.yaml]
         end
 
         subgraph SVC["Business Services"]
@@ -106,7 +114,7 @@ graph TB
 
         subgraph SEC["Security & Docs"]
             SS[Spring Security\nBasic Auth · RBAC]
-            SW[Swagger / OpenAPI 3\nBearer JWT · 12 tags\nlocalhost:8080/swagger-ui.html]
+            SW[Swagger / OpenAPI 3\nBearer JWT · 13 tags\nlocalhost:8080/swagger-ui.html]
         end
     end
 
@@ -135,11 +143,13 @@ graph TB
     SMDS -->|HTTPS GET| YF
     SS --> API
     SW --> API
+    API --> RESIL
+    RESIL --> SVC
 ```
 
 ## Prerequisites
 
-- **JDK 17 or higher** (Java 23 recommended)
+- **JDK 17 or higher** (Java 21+ recommended)
 - **Maven 3.9+**
 - **Node.js 18+** and npm
 - **Docker Desktop** (for PostgreSQL and Redis)
@@ -285,10 +295,28 @@ The frontend will start on http://localhost:4200
   - Reserved Balance: Funds allocated to pending limit orders
   - Available Balance: Cash Balance - Reserved Balance
 
+### Rate Limiting & Circuit Breaking
+- **Hot-Reloadable Config**: Edit `config/throttle-config.yaml` at the project root; the registry auto-reloads within 60 seconds (or use `POST /api/admin/resilience/reload` for immediate effect)
+- **Global default**: 1 TPS with circuit breaker (50% failure threshold, 30 s open state)
+- **Per-service overrides** (selected):
+  | Service | TPS | Notes |
+  |---|---|---|
+  | TradeService | 5 | Core order execution |
+  | AccountService | 5 | Cash operations |
+  | PortfolioService | 10 | Real-time portfolio |
+  | StockPriceService | 10 | Yahoo Finance proxy |
+  | StockPricePredictionService | 2 | Compute-heavy |
+  | TrendAnalysisService | 3 | ML weights |
+  | AuthService | 3 | Login protection |
+  | ReconciliationService | 1 | Background only |
+  | Batch/Audit services | disabled | No throttle |
+- **Responses**: 429 `Too Many Requests` when throttled; circuit breaker returns 503 when open
+
 ### Scheduled Jobs
 - **Limit Order Processor**: Runs every 5 minutes
 - **Account Reconciliation**: Runs every 1 minute
 - **Data Initialization**: Creates default users on first startup
+- **Throttle Config Reload**: Runs every 60 seconds (fixed-delay)
 
 ## Troubleshooting
 
@@ -539,6 +567,10 @@ Once the backend is running, access Swagger UI at:
 - `POST /api/admin/rules` - Create new rule
 - `PUT /api/admin/rules/{id}` - Update rule
 - `DELETE /api/admin/rules/{id}` - Delete rule
+
+### Admin APIs - Resilience (ADMIN role required)
+- `GET /api/admin/resilience/status` - Current throttle config, per-service overrides, and live circuit-breaker states
+- `POST /api/admin/resilience/reload` - Force-reload `config/throttle-config.yaml` immediately (without waiting 60 s)
 
 ## Rule Engine
 

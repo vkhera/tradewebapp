@@ -34,10 +34,13 @@ public class OpenApiConfig {
                     - Multi-technique trend analysis (MA Crossover, RSI, MACD, Momentum, Volume) with adaptive per-stock weights\n
                     - 8-hour stock price prediction using 5-min Yahoo Finance bars (Linear Regression, EMA, Momentum, Mean Reversion, Holt-Winters)\n
                     - CSV import/export for holdings and activity\n
+                    - Rate limiting & circuit breaking: Resilience4j throttle with hot-reloadable YAML config (`config/throttle-config.yaml`); per-service TPS overrides, 60-second auto-reload\n
                     \n
-                    **Authentication:** Use `POST /api/auth/login` to obtain a session token, then click **Authorize** and enter it.
+                    **Authentication:** Use `POST /api/auth/login` to obtain a session token, then click **Authorize** and enter it.\n
+                    \n
+                    **Rate Limits (default 1 TPS):** TradeService 5 TPS · AccountService 5 TPS · PortfolioService 10 TPS · StockPriceService 10 TPS · PredictionService 2 TPS · TrendAnalysis 3 TPS · AuthService 3 TPS
                     """)
-                .version("2.0.0")
+                .version("2.1.0")
                 .contact(new Contact()
                     .name("Stock Brokerage Team")
                     .email("support@stockbrokerage.com"))
@@ -61,7 +64,8 @@ public class OpenApiConfig {
                 new Tag().name("Clients").description("Client registration and profile management"),
                 new Tag().name("Admin – Clients").description("Admin: client management and audit logs"),
                 new Tag().name("Admin – Trades").description("Admin: full trade history and audit logs"),
-                new Tag().name("Admin – Rules").description("Admin: business rule CRUD (fraud / cash validation)")
+                new Tag().name("Admin – Rules").description("Admin: business rule CRUD (fraud / cash validation)"),
+                new Tag().name("Resilience Admin").description("Admin: hot-reloadable rate-limiter and circuit-breaker config; live state and force-reload")
             ))
             .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
             .components(new Components()
