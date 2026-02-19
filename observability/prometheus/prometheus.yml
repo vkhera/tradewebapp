@@ -1,0 +1,43 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Prometheus scrape configuration
+#
+# Since the observability stack runs independently (docker-compose.observability.yml),
+# applications are reached via host.docker.internal regardless of whether they
+# run locally (mvn spring-boot:run) or as Docker containers (as long as they
+# expose their port to the host).
+#
+# To add another application:
+#   1. Duplicate the job block below
+#   2. Change the target port / metrics path
+#   3. Reload:  curl -XPOST http://localhost:9090/-/reload
+# ──────────────────────────────────────────────────────────────────────────────
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: local
+    environment: development
+
+scrape_configs:
+
+  # ── Stock Brokerage – Spring Boot app on host:8080 ────────────────────────
+  - job_name: 'stock-brokerage'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+        labels:
+          app: stock-brokerage
+
+  # ── Add more applications here ────────────────────────────────────────────
+  # - job_name: 'my-other-app'
+  #   metrics_path: '/actuator/prometheus'
+  #   static_configs:
+  #     - targets: ['host.docker.internal:8081']
+  #       labels:
+  #         app: my-other-app
+
+  # ── Prometheus self-monitoring ────────────────────────────────────────────
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

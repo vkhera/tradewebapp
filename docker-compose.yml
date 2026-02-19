@@ -42,6 +42,10 @@ services:
       DB_PASS: stockpass
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # Traces – set if the observability stack is running alongside this app.
+      # Tempo listens on host port 9411 (started via docker-compose.observability.yml).
+      # TEMPO_HOST: host.docker.internal
+      # TEMPO_ZIPKIN_PORT: 9411
       # Optional JVM flags (e.g. "-Xmx512m")
       JAVA_OPTS: ""
     ports:

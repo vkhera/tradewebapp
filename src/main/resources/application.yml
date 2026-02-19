@@ -62,8 +62,10 @@ logging:
     root: INFO
     com.example.stockbrokerage: DEBUG
     org.hibernate.SQL: DEBUG
+  # Console pattern includes traceId/spanId injected by Micrometer Tracing via MDC
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{traceId:-},%X{spanId:-}] - %msg%n"
+  # Plain text log (kept for compatibility); JSON log written by logback-spring.xml
   file:
     name: logs/stock-brokerage.log
     max-size: 10MB
@@ -74,11 +76,29 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: "*"            # expose all endpoints; restrict via security in prod
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  # Tag every metric with the application name for multi-service Grafana filtering
   metrics:
+    tags:
+      application: ${spring.application.name}
     export:
       prometheus:
         enabled: true
+  # Distributed tracing – sends spans to Tempo (Zipkin-compatible ingest on :9411)
+  tracing:
+    sampling:
+      probability: 1.0          # 100 % sampling; lower to 0.1 in production
+  # Distributed traces are sent to Tempo via Zipkin protocol.
+  # When running locally:  Tempo on localhost:9411 (docker-compose.observability.yml)
+  # When running in Docker: set TEMPO_HOST=host.docker.internal in docker-compose.yml
+  zipkin:
+    tracing:
+      endpoint: "http://${TEMPO_HOST:localhost}:${TEMPO_ZIPKIN_PORT:9411}/api/v2/spans"
 
 # Custom Lists
 countryetf:

@@ -13,9 +13,12 @@ export default defineConfig({
     trace: 'on-first-retry'
   },
   webServer: {
-    command: 'npx http-server ../frontend/dist/stock-brokerage-ui/browser -p 4201 -s',
+    // Custom SPA+proxy server: serves Angular static files with index.html fallback
+    // for unknown routes (so Angular Router handles them) and proxies /api/** to
+    // the running Spring Boot backend on port 8080.
+    command: 'node spa-proxy-server.js 4201',
     url: 'http://127.0.0.1:4201',
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 120_000
   },
   projects: [

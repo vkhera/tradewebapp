@@ -1,4 +1,7 @@
 spring:
+  profiles:
+    active: test
+
   datasource:
     url: jdbc:h2:mem:testdb
     driver-class-name: org.h2.Driver
@@ -19,7 +22,7 @@ spring:
   cache:
     type: simple
 
-# Disable Redis auto-configuration for tests
+  # Disable Redis auto-configuration for tests
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration

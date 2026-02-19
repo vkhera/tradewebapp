@@ -4,6 +4,12 @@ setlocal enabledelayedexpansion
 REM ====================================================================
 REM  Stock Brokerage - Full Application Startup
 REM  Start order: PostgreSQL -> Redis -> Spring Boot -> Angular (port 4200)
+REM
+REM  Usage:
+REM    start-app.bat          - start the application only
+REM    start-app.bat obs      - also start the observability stack
+ REM                            (Grafana :3000, Prometheus :9090, Loki :3100,
+ REM                             Tempo :3200/:9411)
 REM ====================================================================
 
 set SCRIPT_DIR=%~dp0
@@ -26,6 +32,10 @@ if exist "C:\Users\normaluser\.maven\maven-3.9.12\bin\mvn.cmd" (
     set MAVEN_CMD=C:\Users\normaluser\.maven\maven-3.9.12\bin\mvn.cmd
 )
 
+REM ── Parse optional argument ───────────────────────────────────────
+set START_OBS=0
+if /I "%~1"=="obs" set START_OBS=1
+
 echo.
 echo ====================================================================
 echo   Stock Brokerage Application - Starting All Services
@@ -44,13 +54,24 @@ if %errorlevel% neq 0 (
 )
 echo   Docker is running.
 
-REM ── Step 2: Start PostgreSQL + Redis ──────────────────────────────
+REM ── Step 2: Start PostgreSQL + Redis (+ optional observability) ───
 echo.
 echo [2/4] Starting PostgreSQL and Redis via Docker...
 docker compose up -d postgres redis
 if %errorlevel% neq 0 (
     echo   ERROR: Failed to start Docker containers.
     pause & exit /b 1
+)
+
+if "!START_OBS!"=="1" (
+    echo.
+    echo [obs] Starting observability stack (Grafana / Prometheus / Loki / Tempo)...
+    docker compose -f docker-compose.observability.yml up -d
+    if !errorlevel! neq 0 (
+        echo   WARNING: Observability stack failed to start. Continuing anyway.
+    ) else (
+        echo   Observability stack starting in background.
+    )
 )
 
 REM Poll PostgreSQL health
@@ -114,17 +135,35 @@ echo ====================================================================
 echo   All services started successfully!
 echo ====================================================================
 echo.
-echo   Frontend :  http://localhost:4200
-echo   Backend  :  http://localhost:8080
-echo   Swagger  :  http://localhost:8080/swagger-ui/index.html
-echo   Actuator :  http://localhost:8080/actuator/health
+echo   APPLICATION
+echo   -----------
+echo   Frontend     :  http://localhost:4200
+echo   Backend API  :  http://localhost:8080
+echo   Swagger UI   :  http://localhost:8080/swagger-ui/index.html
+echo   Actuator     :  http://localhost:8080/actuator/health
+echo   Prometheus   :  http://localhost:8080/actuator/prometheus
 echo.
-echo   PostgreSQL : Docker 'stockdb-postgres'  port 5432
-echo   Redis      : Docker 'stockdb-redis'     port 6379
+echo   INFRASTRUCTURE
+echo   --------------
+echo   PostgreSQL   :  localhost:5432  (container: stockdb-postgres)
+echo   Redis        :  localhost:6379  (container: stockdb-redis)
 echo.
-echo   Default logins:
-echo     admin   / admin123
-echo     client1 / pass1234
-echo     client2 / pass1234
+if "!START_OBS!"=="1" (
+echo   OBSERVABILITY
+echo   -------------
+echo   Grafana      :  http://localhost:3000   login: admin / admin
+echo   Prometheus   :  http://localhost:9090
+echo   Loki         :  http://localhost:3100   (queried via Grafana)
+echo   Tempo        :  http://localhost:3200   (queried via Grafana)
+echo   Zipkin ingest:  localhost:9411          (apps send traces here)
+echo.
+)
+echo   DEFAULT LOGINS
+echo   --------------
+echo   admin1  / pass1234
+echo   client1 / pass1234  (Alice Johnson)
+echo   client2 / pass1234  (Bob Smith)
+echo.
+echo   TIP: Run 'start-app.bat obs' to also start the observability stack.
 echo.
 pause

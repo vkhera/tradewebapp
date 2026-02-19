@@ -147,6 +147,138 @@ graph TB
     RESIL --> SVC
 ```
 
+## Observability
+
+The application ships with a full, free observability stack: **Metrics** (Prometheus + Grafana), **Distributed Logs** (Loki + Promtail), and **Traces** (Tempo). It lives in a **separate** `docker-compose.observability.yml` so you can reuse it for any number of applications.
+
+### Component & Port Reference
+
+| Component | Container | Host Port | Purpose |
+|-----------|-----------|-----------|---------|
+| Angular / nginx | `stockbrokerage-frontend` | **80** | Web UI |
+| Spring Boot | `stockbrokerage-backend` | **8080** | REST API + Prometheus scrape endpoint |
+| PostgreSQL 16 | `stockdb-postgres` | **5432** | Relational data |
+| Redis 7 | `stockdb-redis` | **6379** | Cache + sessions |
+| Prometheus | `obs-prometheus` | **9090** | Metrics collection |
+| Grafana | `obs-grafana` | **3000** | Dashboards, logs & traces UI |
+| Loki | `obs-loki` | **3100** (internal) | Log aggregation |
+| Tempo | `obs-tempo` | **3200** (API) / **9411** (Zipkin) | Distributed tracing |
+| Promtail | `obs-promtail` | — | Log shipper (tails `logs/*.json`) |
+
+### Architecture with Observability
+
+```mermaid
+graph LR
+    BROWSER["fa:fa-globe Browser"]
+
+    subgraph APP["Application Stack  ·  docker-compose.yml"]
+        direction TB
+        FE["nginx + Angular\n:80"]
+        BE["Spring Boot\n:8080\n/actuator/prometheus"]
+        PG[("PostgreSQL 16\n:5432")]
+        RD[("Redis 7\n:6379")]
+    end
+
+    LOGFILE["logs/\nstock-brokerage.json"]
+
+    subgraph OBS["Observability Stack  ·  docker-compose.observability.yml"]
+        direction TB
+        PROM["Prometheus\n:9090"]
+        GF["Grafana\n:3000"]
+        LK["Loki\n:3100"]
+        PRTL["Promtail"]
+        TMPO["Tempo\n:3200 (API)\n:9411 (Zipkin)"]
+    end
+
+    BROWSER -->|":80"| FE
+    BROWSER -->|":3000 dashboards"| GF
+    FE -->|":8080"| BE
+    BE --> PG
+    BE --> RD
+    BE -. "Brave spans\n:9411" .-> TMPO
+    BE -->|"JSON logs"| LOGFILE
+    PROM -->|"scrape /actuator/prometheus"| BE
+    PRTL -->|"tail"| LOGFILE
+    PRTL -->|"push :3100"| LK
+    GF -->|"query"| PROM
+    GF -->|"query"| LK
+    GF -->|"query"| TMPO
+```
+
+### Quick Start
+
+```powershell
+# Application only
+start-app.bat
+
+# Application + observability
+start-app.bat obs
+
+# Observability stack only (works with any app)
+docker compose -f docker-compose.observability.yml up -d
+
+# Stop application + observability
+stop-app.bat all
+```
+
+| URL | Purpose | Credentials |
+|-----|---------|-------------|
+| http://localhost | Web UI | see accounts below |
+| http://localhost:8080/swagger-ui.html | API docs | — |
+| http://localhost:3000 | Grafana dashboards | `admin` / `admin` |
+| http://localhost:9090 | Prometheus query | — |
+| http://localhost:8080/actuator/prometheus | Raw metrics | — |
+| http://localhost:8080/actuator/health | Health check | — |
+
+### Pre-built Grafana Dashboard
+
+A **Spring Boot Overview** dashboard is auto-provisioned at:
+`Dashboards → stock-brokerage → Spring Boot Overview`
+
+Panels: HTTP Request Rate, Error Rate, Latency (P50/P95/P99), JVM Heap, Non-Heap, GC pauses, CPU, HikariCP pool, Log events by level, Thread count, Process uptime.
+
+### Trace → Log Correlation
+
+1. Open **Grafana → Explore → Tempo**, search recent traces
+2. Click any span → **Logs for this span** link appears automatically
+3. Loki shows the JSON log lines that share the same `traceId`
+
+### Adding Another Application to the Observability Stack
+
+1. Add a scrape job in `observability/prometheus/prometheus.yml`:
+   ```yaml
+   - job_name: 'my-other-app'
+     static_configs:
+       - targets: ['host.docker.internal:8081']
+         labels:
+           application: 'my-other-app'
+     metrics_path: '/actuator/prometheus'
+   ```
+2. Add a Promtail pipeline in `observability/promtail/promtail-config.yml` pointing to the new app's JSON log file.
+3. Reload Prometheus without restarting: `curl -X POST http://localhost:9090/-/reload`
+
+### Single All-in-One Image with Observability
+
+For environments where running separate compose files is not practical, a single Docker image bundles all nine services (app + observability):
+
+```powershell
+# Build
+docker build -f Dockerfile.allinone-obs -t vkdocker/stock-brokerage-allinone-obs .
+
+# Run (exposes all UI ports + app port)
+docker run -d `
+  -p 80:80 `
+  -p 3000:3000 `
+  -p 9090:9090 `
+  --name stockapp-full `
+  vkdocker/stock-brokerage-allinone-obs
+
+# Wait ~90 s, then open:
+#   http://localhost        – Web UI
+#   http://localhost:3000   – Grafana (admin / admin)
+#   http://localhost:9090   – Prometheus
+```
+
 ## Prerequisites
 
 - **JDK 17 or higher** (Java 21+ recommended)
@@ -433,9 +565,23 @@ ws-trd-1/
 │       └── app/
 │           ├── components/         # Angular components
 │           └── services/           # Angular services
-├── docker-compose.yml              # Docker services
-├── pom.xml                        # Maven dependencies
-└── README.md                      # This file
+├── docker-compose.yml                   # Application services (postgres, redis, backend, frontend)
+├── docker-compose.observability.yml     # Observability stack (Prometheus, Grafana, Loki, Tempo, Promtail)
+├── observability/
+│   ├── prometheus/prometheus.yml        # Prometheus scrape config
+│   ├── grafana/
+│   │   ├── provisioning/datasources/    # Auto-provisioned Prometheus + Loki + Tempo
+│   │   ├── provisioning/dashboards/
+│   │   └── dashboards/spring-boot.json # Pre-built Spring Boot dashboard
+│   ├── loki/loki-config.yml
+│   ├── promtail/promtail-config.yml
+│   └── tempo/tempo-config.yml
+├── Dockerfile.allinone                  # All-in-one image (app only, 4 processes)
+├── Dockerfile.allinone-obs              # All-in-one image with observability (9 processes)
+├── start-app.bat                        # Windows: start app [+ observability]
+├── stop-app.bat                         # Windows: stop app [+ observability]
+├── pom.xml                              # Maven dependencies
+└── README.md                            # This file
 ```
 
 ## Creating Portable Package

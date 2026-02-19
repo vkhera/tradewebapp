@@ -1,0 +1,154 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+#  All-in-one image with full Observability stack
+#
+#  Services managed by supervisord (9 processes):
+#    Application:   PostgreSQL 16 · Redis 7 · Spring Boot 3 · Angular/nginx
+#    Observability: Prometheus · Grafana · Loki · Promtail · Tempo
+#
+#  Usage (any machine with Docker installed, no compose required):
+#
+#    docker build -f Dockerfile.allinone-obs -t vkdocker/stock-brokerage-allinone-obs .
+#
+#    docker run -d \
+#      -p 80:80 \
+#      -p 3000:3000 \
+#      -p 9090:9090 \
+#      --name stockapp-full \
+#      vkdocker/stock-brokerage-allinone-obs
+#
+#    # Wait ~90 s, then open:
+#    #   http://localhost           – Web UI
+#    #   http://localhost:3000      – Grafana (admin / admin)
+#    #   http://localhost:9090      – Prometheus
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Stage 1: Build Spring Boot JAR ────────────────────────────────────────────
+FROM maven:3.9-eclipse-temurin-21 AS backend-build
+WORKDIR /workspace
+COPY pom.xml .
+RUN mvn -B dependency:go-offline -q
+COPY src ./src
+RUN mvn -B package -DskipTests -q
+
+# ── Stage 2: Build Angular ─────────────────────────────────────────────────────
+FROM node:18-alpine AS frontend-build
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm ci --quiet
+COPY frontend/ .
+RUN npx ng build --configuration=production --prerender=false
+
+# ── Stage 3: All-in-one runtime ────────────────────────────────────────────────
+FROM ubuntu:24.04
+
+# Avoid interactive prompts during apt
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ── Install base packages ──────────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        postgresql-16 \
+        redis-server \
+        openjdk-21-jre-headless \
+        nginx \
+        supervisor \
+        curl \
+        wget \
+        tar \
+        gnupg \
+        apt-transport-https \
+        ca-certificates \
+        software-properties-common \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Add Grafana APT repository & install Grafana OSS, Loki, Promtail, Tempo ───
+RUN mkdir -p /etc/apt/keyrings \
+    && wget -qO- https://apt.grafana.com/gpg.key \
+       | gpg --dearmor -o /etc/apt/keyrings/grafana.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" \
+       > /etc/apt/sources.list.d/grafana.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        grafana \
+        loki \
+        promtail \
+        tempo \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Install Prometheus binary ─────────────────────────────────────────────────
+ARG PROMETHEUS_VERSION=2.51.2
+RUN wget -qO /tmp/prometheus.tar.gz \
+        "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz" \
+    && tar -xf /tmp/prometheus.tar.gz -C /tmp \
+    && install -m 755 /tmp/prometheus-${PROMETHEUS_VERSION}.linux-amd64/prometheus  /usr/local/bin/prometheus \
+    && install -m 755 /tmp/prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool    /usr/local/bin/promtool \
+    && rm -rf /tmp/prometheus*
+
+# ── Create required directories ───────────────────────────────────────────────
+RUN mkdir -p \
+        /var/log/supervisor \
+        /app/logs \
+        /var/lib/prometheus \
+        /etc/prometheus \
+        /etc/loki \
+        /etc/promtail \
+        /etc/tempo \
+        /etc/grafana/dashboards \
+        /tmp/loki \
+        /tmp/tempo/blocks \
+        /tmp/tempo/wal \
+        /tmp/tempo/generator/wal
+
+# ── Copy application artifacts ─────────────────────────────────────────────────
+WORKDIR /app
+COPY --from=backend-build /workspace/target/stock-brokerage-*.jar /app/backend.jar
+COPY --from=frontend-build /app/dist/stock-brokerage-ui/browser /usr/share/nginx/html/
+COPY config /app/config
+
+# ── nginx config (proxy to localhost:8080) ─────────────────────────────────────
+COPY nginx-allinone.conf /etc/nginx/sites-available/default
+
+# ── Prometheus config (scrapes localhost:8080) ────────────────────────────────
+COPY observability/prometheus/prometheus-allinone.yml /etc/prometheus/prometheus.yml
+
+# ── Loki config ────────────────────────────────────────────────────────────────
+COPY observability/loki/loki-config.yml /etc/loki/loki-config.yml
+
+# ── Promtail config (pushes to localhost:3100) ────────────────────────────────
+COPY observability/promtail/promtail-allinone.yml /etc/promtail/promtail-config.yml
+
+# ── Tempo config (remote_write to localhost:9090) ─────────────────────────────
+COPY observability/tempo/tempo-allinone.yml /etc/tempo/tempo-config.yml
+
+# ── Grafana provisioning (datasources + dashboards using localhost URLs) ───────
+COPY observability/grafana/provisioning/datasources/datasources-allinone.yml \
+     /etc/grafana/provisioning/datasources/datasources.yml
+COPY observability/grafana/provisioning/dashboards/dashboards.yml \
+     /etc/grafana/provisioning/dashboards/dashboards.yml
+COPY observability/grafana/dashboards/spring-boot.json \
+     /etc/grafana/dashboards/spring-boot.json
+
+# ── supervisord config (9 services) ───────────────────────────────────────────
+COPY supervisord-obs.conf /etc/supervisor/conf.d/supervisord.conf
+
+# ── Entrypoint (initialises postgres user/db on first boot) ───────────────────
+COPY docker-entrypoint-allinone.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# ── Spring Boot connection settings (all services on localhost) ────────────────
+ENV DB_HOST=localhost \
+    DB_PORT=5432 \
+    DB_USER=stockuser \
+    DB_PASS=stockpass \
+    REDIS_HOST=localhost \
+    REDIS_PORT=6379 \
+    TEMPO_HOST=localhost \
+    TEMPO_ZIPKIN_PORT=9411 \
+    JAVA_OPTS=""
+
+# ── Expose ports ───────────────────────────────────────────────────────────────
+# :80   – Web UI (nginx)
+# :3000 – Grafana dashboards
+# :9090 – Prometheus query UI
+EXPOSE 80 3000 9090
+
+ENTRYPOINT ["/entrypoint.sh"]

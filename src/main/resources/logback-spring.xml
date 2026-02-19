@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  logback-spring.xml – Observability-ready logging configuration
+  ════════════════════════════════════════════════════════════════
+  • CONSOLE  → human-readable with traceId/spanId (injected by Micrometer Tracing via MDC)
+  • FILE_JSON → structured JSON (Logstash encoder) consumed by Promtail → Loki → Grafana
+-->
+<configuration>
+
+    <!-- ── Pull in Spring Boot's base defaults (log levels, conversion
+         rules for Spring-specific types) ──────────────────────────── -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- ── Properties ───────────────────────────────────────────────── -->
+    <springProperty name="APP_NAME"  source="spring.application.name" defaultValue="stock-brokerage"/>
+    <springProperty name="LOG_FILE"  source="logging.file.name"       defaultValue="logs/stock-brokerage.log"/>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         CONSOLE – color, human-readable, includes trace/span IDs
+         ═══════════════════════════════════════════════════════════════ -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) %cyan([%thread]) %yellow(%logger{36}) %blue([%X{traceId:-none},%X{spanId:-none}]) - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         FILE (plain text) – matches existing log path from application.yml
+         ═══════════════════════════════════════════════════════════════ -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_FILE}.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [traceId=%X{traceId:-} spanId=%X{spanId:-}] - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         FILE_JSON – structured JSON consumed by Promtail → Loki
+         Every log line is a JSON object with:
+           timestamp, level, logger, thread, message,
+           traceId, spanId (from Micrometer Tracing MDC),
+           service (custom field)
+         ═══════════════════════════════════════════════════════════════ -->
+    <appender name="FILE_JSON" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/stock-brokerage.json</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/stock-brokerage.%d{yyyy-MM-dd}.%i.json.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>200MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <!-- Include all MDC fields (traceId, spanId injected by Micrometer Tracing) -->
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
+            <!-- Static fields added to every log line for Grafana/Loki label filtering -->
+            <customFields>{"service":"${APP_NAME}","env":"${SPRING_PROFILES_ACTIVE:-default}"}</customFields>
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <message>message</message>
+                <logger>logger</logger>
+                <thread>thread</thread>
+                <level>level</level>
+                <levelValue>[ignore]</levelValue>
+                <version>[ignore]</version>
+            </fieldNames>
+            <timestampPattern>yyyy-MM-dd'T'HH:mm:ss.SSS'Z'</timestampPattern>
+            <timeZone>UTC</timeZone>
+        </encoder>
+    </appender>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         Per-package levels
+         ═══════════════════════════════════════════════════════════════ -->
+    <logger name="com.example.stockbrokerage" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+        <appender-ref ref="FILE_JSON"/>
+    </logger>
+
+    <!-- Reduce Hibernate SQL noise – only in DEBUG for our package above -->
+    <logger name="org.hibernate.SQL"            level="DEBUG" additivity="false">
+        <appender-ref ref="FILE_JSON"/>
+    </logger>
+    <logger name="org.hibernate.orm.jdbc.bind"  level="TRACE" additivity="false">
+        <!-- skip – too verbose; enable if diagnosing parameter binding issues -->
+    </logger>
+
+    <!-- Suppress noisy startup/framework logs -->
+    <logger name="org.springframework.web.servlet.DispatcherServlet"  level="WARN"/>
+    <logger name="org.springframework.security"                        level="WARN"/>
+
+    <!-- ── Root: INFO → console + both files ───────────────────────── -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+        <appender-ref ref="FILE_JSON"/>
+    </root>
+
+</configuration>

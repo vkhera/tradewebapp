@@ -1,0 +1,121 @@
+version: '3.8'
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  Observability Stack – Prometheus · Grafana · Loki · Promtail · Tempo
+#  100 % free, open-source tools; works with ANY application.
+#
+#  Usage:
+#    Start :  docker compose -f docker-compose.observability.yml up -d
+#    Stop  :  docker compose -f docker-compose.observability.yml down
+#
+#  Endpoints (all on localhost):
+#    Grafana    http://localhost:3000   admin / admin
+#    Prometheus http://localhost:9090
+#    Loki       http://localhost:3100   (internal; queried via Grafana)
+#    Tempo      http://localhost:3200   (internal; queried via Grafana)
+#    Zipkin     http://localhost:9411   (Tempo ingest – apps send traces here)
+#
+#  Application requirements:
+#    • Expose a Prometheus scrape endpoint  (e.g. /actuator/prometheus)
+#    • Send Zipkin/Brave spans to           localhost:9411
+#    • Write structured JSON logs to        <project-root>/logs/*.json
+#
+#  For Spring Boot apps add these to pom.xml:
+#    micrometer-registry-prometheus
+#    micrometer-tracing-bridge-brave
+#    zipkin-reporter-brave
+#    logstash-logback-encoder
+#
+#  Log path:
+#    Promtail watches ./logs/*.json (relative to this file).
+#    If your app writes logs elsewhere, edit promtail-config.yml → __path__.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+services:
+
+  # ─── Prometheus – metrics scraping ──────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: obs-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-remote-write-receiver"   # Tempo metrics-generator writes here
+      - "--web.enable-lifecycle"               # POST /-/reload to hot-reload config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"    # lets Prometheus reach apps on the host
+    restart: unless-stopped
+
+  # ─── Grafana – unified dashboards (metrics + logs + traces) ─────────────────
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: obs-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER:     admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED:   "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE:  Viewer
+      GF_FEATURE_TOGGLES_ENABLE:   traceqlEditor
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    restart: unless-stopped
+
+  # ─── Loki – log aggregation ──────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: obs-loki
+    user: "0"
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/tmp/loki
+    command: -config.file=/etc/loki/loki-config.yml
+    restart: unless-stopped
+
+  # ─── Promtail – tails app JSON logs and ships them to Loki ──────────────────
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: obs-promtail
+    volumes:
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      # Bind-mount the project logs directory (written by the app on host)
+      # Adjust this path if your application writes logs elsewhere.
+      - ./logs:/app/logs:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  # ─── Tempo – distributed tracing backend ────────────────────────────────────
+  tempo:
+    image: grafana/tempo:2.4.2
+    container_name: obs-tempo
+    ports:
+      - "3200:3200"    # Tempo HTTP API → Grafana datasource
+      - "9411:9411"    # Zipkin ingest  → apps send Brave/Zipkin spans here
+    volumes:
+      - ./observability/tempo/tempo-config.yml:/etc/tempo/tempo-config.yml:ro
+      - tempo_data:/tmp/tempo
+    command: -config.file=/etc/tempo/tempo-config.yml
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  tempo_data:

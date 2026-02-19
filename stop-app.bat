@@ -4,7 +4,17 @@ setlocal enabledelayedexpansion
 REM ====================================================================
 REM  Stock Brokerage - Full Application Shutdown
 REM  Stop order: Angular -> Spring Boot -> Redis -> PostgreSQL
+REM
+REM  Usage:
+REM    stop-app.bat          - stop the application only
+REM    stop-app.bat obs      - also stop the observability stack
+REM    stop-app.bat all      - stop everything (app + observability)
 REM ====================================================================
+
+REM ── Parse optional argument ───────────────────────────────────────────────
+set STOP_OBS=0
+if /I "%~1"=="obs" set STOP_OBS=1
+if /I "%~1"=="all" set STOP_OBS=1
 
 echo.
 echo ====================================================================
@@ -58,13 +68,26 @@ if %errorlevel% equ 0 (
     echo   PostgreSQL container 'stockdb-postgres' not found - skipping.
 )
 
+REM ── Step 5 (optional): Stop Observability Stack ───────────────────
+if "!STOP_OBS!"=="1" (
+    echo.
+    echo [obs] Stopping observability stack (Grafana / Prometheus / Loki / Tempo)...
+    docker compose -f docker-compose.observability.yml down
+    if !errorlevel! equ 0 (
+        echo   Observability stack stopped.
+    ) else (
+        echo   Observability stack was not running or failed to stop.
+    )
+)
+
 echo.
 echo ====================================================================
-echo   All services stopped.
+echo   Services stopped.
 echo ====================================================================
 echo.
-echo   Tip: Run start-app.bat to start everything again.
-echo   Tip: Docker containers are stopped but data is preserved in volumes.
-echo        Run 'docker compose down -v' to also remove volumes/data.
+echo   TIP: Run 'start-app.bat' to start the application again.
+echo   TIP: Run 'start-app.bat obs' to also start the observability stack.
+echo   TIP: Docker volumes are preserved. Use 'docker compose down -v' to
+echo        also wipe data (PostgreSQL, Redis).
 echo.
 pause

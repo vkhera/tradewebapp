@@ -1,12 +1,9 @@
 package com.example.stockbrokerage.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.stockbrokerage.client.YahooFinanceClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.*;
 import java.math.BigDecimal;
@@ -18,19 +15,22 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * Fetches real historical 5-minute stock price data from Yahoo Finance (free, no API key).
- * Uses interval=5m&range=60d – up to ~4700 bars with no API key required.
- * Falls back to CSV cache if the API is unavailable.
+ * Provides historical 5-minute stock price data.
+ * <p>
+ * Data is sourced from Yahoo Finance via {@link YahooFinanceClient} and cached locally as CSV
+ * to avoid redundant network calls. In the {@code test} profile the client is replaced by
+ * {@link com.example.stockbrokerage.client.MockYahooFinanceClient}, which returns
+ * deterministic stub data with no network access.
  */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class StockMarketDataService {
 
     private static final String DATA_DIR = "stock_predictions";
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final YahooFinanceClient yahooFinanceClient;
 
     /**
      * Returns the last N 5-minute bars of closing prices for the symbol.
@@ -46,8 +46,8 @@ public class StockMarketDataService {
             return cached;
         }
 
-        // Fetch fresh from Yahoo Finance
-        List<BigDecimal> prices = fetchFromYahooFinance(symbol);
+        // Fetch fresh from Yahoo Finance (real or mock, depending on active profile)
+        List<BigDecimal> prices = yahooFinanceClient.getHistoricalPrices(symbol);
 
         if (prices.isEmpty()) {
             log.warn("Yahoo Finance returned no data for {}, using fallback", symbol);
@@ -71,63 +71,6 @@ public class StockMarketDataService {
             return prices.getLast();
         }
         return BigDecimal.valueOf(100); // ultimate fallback
-    }
-
-    // -------------------------------------------------------------------------
-    // Yahoo Finance API
-    // -------------------------------------------------------------------------
-
-    private List<BigDecimal> fetchFromYahooFinance(String symbol) {
-        try {
-            // 5-min bars, 60-day range → ~4680 bars (free, no API key)
-            String url = "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=5m&range=60d".formatted(symbol);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-            headers.set("Accept", "application/json");
-            headers.set("Accept-Language", "en-US,en;q=0.9");
-
-            HttpEntity<String> entity = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
-
-            if (response.getStatusCode() != HttpStatus.OK || response.getBody() == null) {
-                log.warn("Yahoo Finance returned status {} for {}", response.getStatusCode(), symbol);
-                return List.of();
-            }
-
-            return parseYahooFinanceResponse(response.getBody(), symbol);
-
-        } catch (Exception e) {
-            log.warn("Failed to fetch from Yahoo Finance for {}: {}", symbol, e.getMessage());
-            return List.of();
-        }
-    }
-
-    private List<BigDecimal> parseYahooFinanceResponse(String json, String symbol) {
-        List<BigDecimal> prices = new ArrayList<>();
-        try {
-            JsonNode root = objectMapper.readTree(json);
-            JsonNode result = root.path("chart").path("result");
-            if (result.isEmpty() || !result.isArray()) {
-                return prices;
-            }
-
-            JsonNode firstResult = result.get(0);
-            JsonNode closePrices = firstResult.path("indicators").path("quote").get(0).path("close");
-
-            if (closePrices.isArray()) {
-                for (JsonNode priceNode : closePrices) {
-                    if (!priceNode.isNull()) {
-                        prices.add(BigDecimal.valueOf(priceNode.asDouble()).setScale(4, RoundingMode.HALF_UP));
-                    }
-                }
-            }
-
-            log.info("Fetched {} 5-min bars for {} from Yahoo Finance", prices.size(), symbol);
-        } catch (Exception e) {
-            log.error("Error parsing Yahoo Finance response for {}: {}", symbol, e.getMessage());
-        }
-        return prices;
     }
 
     // -------------------------------------------------------------------------

@@ -1,0 +1,23 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Prometheus config for the all-in-one Docker image (Dockerfile.allinone-obs).
+#
+# All services run inside the same container, so targets use localhost instead of
+# host.docker.internal.  This file is baked into the image at build time.
+# ──────────────────────────────────────────────────────────────────────────────
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: local
+    environment: allinone
+
+scrape_configs:
+
+  # ── Stock Brokerage – Spring Boot running in the same container ─────────────
+  - job_name: 'stock-brokerage'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['localhost:8080']
+        labels:
+          app: stock-brokerage

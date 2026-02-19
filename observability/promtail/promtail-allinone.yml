@@ -1,0 +1,54 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Promtail config for the all-in-one Docker image (Dockerfile.allinone-obs).
+#
+# Loki runs on localhost (same container), so the push URL uses localhost instead
+# of the obs-loki container name.
+# ──────────────────────────────────────────────────────────────────────────────
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/promtail-positions.yaml
+
+clients:
+  - url: http://localhost:3100/loki/api/v1/push
+
+scrape_configs:
+
+  # ── Stock Brokerage JSON log ───────────────────────────────────────────────
+  - job_name: stock-brokerage
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job:   stock-brokerage
+          app:   stock-brokerage
+          __path__: /app/logs/stock-brokerage.json
+
+    pipeline_stages:
+
+      - json:
+          expressions:
+            level:      level
+            logger:     logger
+            traceId:    traceId
+            spanId:     spanId
+            service:    service
+            message:    message
+            timestamp:  timestamp
+
+      - labels:
+          level:
+          service:
+
+      - structured_metadata:
+          traceId:
+          spanId:
+
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+          fallback_formats:
+            - "2006-01-02T15:04:05.999Z"
+            - "2006-01-02T15:04:05Z"
