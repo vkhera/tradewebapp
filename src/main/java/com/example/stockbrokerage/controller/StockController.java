@@ -18,7 +18,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/stocks")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:4200")
+@CrossOrigin(origins = {"http://localhost:4200", "http://127.0.0.1:4200", "http://localhost:4201", "http://127.0.0.1:4201"})
 @Tag(name = "Stocks", description = "Real-time stock price and quote lookup")
 public class StockController {
 

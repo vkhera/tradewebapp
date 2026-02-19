@@ -16,7 +16,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/trades")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:4200")
+@CrossOrigin(origins = {"http://localhost:4200", "http://127.0.0.1:4200", "http://localhost:4201", "http://127.0.0.1:4201"})
 @Tag(name = "Trades", description = "Order submission, status and history")
 public class TradeController {
     

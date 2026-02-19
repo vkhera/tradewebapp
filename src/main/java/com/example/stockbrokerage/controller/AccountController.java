@@ -19,7 +19,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/account")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:4200")
+@CrossOrigin(origins = {"http://localhost:4200", "http://127.0.0.1:4200", "http://localhost:4201", "http://127.0.0.1:4201"})
 @Tag(name = "Accounts", description = "Client cash account operations (fund / withdraw)")
 public class AccountController {
 
