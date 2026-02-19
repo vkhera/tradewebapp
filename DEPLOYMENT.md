@@ -2,6 +2,46 @@
 
 ---
 
+## ⭐⭐ Simplest: Single all-in-one container (DB + Backend + Frontend)
+
+One image, one command. PostgreSQL, Redis, Spring Boot and Angular nginx inside a single container.
+
+```bash
+# Pull and run — the only command you need
+docker run -d \
+  -p 80:80 \
+  --name stockapp \
+  vkdocker/stock-brokerage-allinone:latest
+```
+
+- **Wait ~90 seconds** for all services to start (first boot initialises the database)
+- Open **http://localhost** in your browser
+- Log in with `admin1` / `pass1234` or `client1` / `pass1234`
+
+> **Data persistence** — add `-v stockapp-data:/var/lib/postgresql` to keep database data across container restarts.
+
+```bash
+# Stop
+docker stop stockapp
+
+# Start again (data preserved if volume was used)
+docker start stockapp
+
+# Remove
+docker rm -f stockapp
+```
+
+**JVM tuning:**
+```bash
+docker run -d -p 80:80 --name stockapp \
+  -e JAVA_OPTS="-Xmx512m -Xms256m" \
+  vkdocker/stock-brokerage-allinone:latest
+```
+
+**Size:** ~763 MB (includes PostgreSQL 16 + Redis 7 + JRE 21 + nginx + app)
+
+---
+
 ## ⭐ Recommended: Run from Docker Hub (Zero Build Required)
 
 Both images are published on Docker Hub.  
