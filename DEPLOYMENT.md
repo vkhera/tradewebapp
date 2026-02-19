@@ -1,5 +1,106 @@
 # Deployment Guide - Stock Brokerage Application
 
+---
+
+## ⭐ Recommended: Run from Docker Hub (Zero Build Required)
+
+Both images are published on Docker Hub.  
+Pull them on **any machine with Docker** — no Java, Maven, or Node.js needed.
+
+### Images
+
+| Image | Tag | Size |
+|---|---|---|
+| `vkdocker/stock-brokerage-backend` | `latest` | ~394 MB |
+| `vkdocker/stock-brokerage-frontend` | `latest` | ~49 MB |
+
+> **Private repositories:** Go to [hub.docker.com](https://hub.docker.com) › your repositories › Settings › Make Private for each image after pushing. Free Docker Hub accounts include 1 private repo; a Pro plan ($9/month) covers unlimited private repos.
+
+---
+
+### Step 1 — Prerequisites on the target machine
+
+- **Docker Desktop** (Windows/Mac) or **Docker Engine** (Linux) — nothing else needed
+- Internet connection to pull images from Docker Hub
+
+### Step 2 — Get the compose file
+
+Copy `docker-compose.yml` from this repo to the target machine, **or** create it inline:
+
+```bash
+# Option A: copy docker-compose.yml from this project (only 1 file needed)
+# Option B: pull from git
+git clone <your-repo-url> --depth 1
+cd ws-trd-1
+```
+
+### Step 3 — (Optional) Create throttle config
+
+The backend loads a live-editable rate-limit config.  
+Place a `config/throttle-config.yaml` alongside `docker-compose.yml`:
+
+```bash
+mkdir config
+# Then create config/throttle-config.yaml  — copy from this repo
+# Without the file, built-in defaults apply (1 TPS global, per-service overrides as coded)
+```
+
+### Step 4 — Login and pull (private images)
+
+```bash
+docker login --username vkdocker   # enter password when prompted
+docker pull vkdocker/stock-brokerage-backend:latest
+docker pull vkdocker/stock-brokerage-frontend:latest
+```
+
+### Step 5 — Run the full stack
+
+```bash
+docker compose up -d
+```
+
+Docker will start 4 containers in dependency order:
+
+```
+postgres  →  redis  →  backend (port 8080)  →  frontend/nginx (port 80)
+```
+
+Wait ~90 seconds for the backend to initialise (schema creation + data seeding).
+
+### Step 6 — Access the application
+
+| URL | What |
+|---|---|
+| `http://localhost` | Angular frontend (login page) |
+| `http://localhost/swagger-ui/` | Swagger UI (proxied through nginx) |
+| `http://localhost:8080/api/...` | Backend REST API (direct) |
+
+### Default login credentials
+
+| Role | Username | Password |
+|---|---|---|
+| Admin | `admin1` | `pass1234` |
+| Client | `client1` … `client5` | `pass1234` |
+
+### Stop / restart
+
+```bash
+docker compose down          # stop (data volumes preserved)
+docker compose down -v       # stop and DELETE all data
+docker compose pull && docker compose up -d   # update to latest images
+```
+
+### JVM tuning via environment variable
+
+Add `JAVA_OPTS` to the `backend` service in `docker-compose.yml`:
+
+```yaml
+environment:
+  JAVA_OPTS: "-Xmx512m -Xms256m"
+```
+
+---
+
 ## Creating a Portable Package
 
 ### Method 1: Using Git (Recommended)
