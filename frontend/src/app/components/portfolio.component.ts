@@ -63,9 +63,10 @@ import { ApiService } from '../services/api.service';
           <tr *ngFor="let holding of portfolio">
 
             <!-- ── Symbol cell with hover prediction tooltip ── -->
-            <td class="symbol-cell"
-                (mouseenter)="onSymbolHover(holding)"
-                (mouseleave)="onSymbolLeave(holding)">
+            <td class="symbol-cell">
+              <div class="symbol-wrapper"
+                   (mouseenter)="onSymbolHover(holding)"
+                   (mouseleave)="onSymbolLeave(holding)">
               <span class="symbol-ticker">{{ holding.symbol }}</span>
               <span class="hint-icon" title="Hover for price predictions">📈</span>
 
@@ -135,6 +136,7 @@ import { ApiService } from '../services/api.service';
                   Updated: {{ holding.predictedAt }} {{ holding.predictionCached ? '(cached)' : '(fresh)' }}
                 </div>
               </div>
+              </div><!-- /symbol-wrapper -->
             </td>
 
             <td class="trend-cell">
@@ -217,9 +219,13 @@ import { ApiService } from '../services/api.service';
 
     /* ── Symbol cell ── */
     .symbol-cell {
-      position: relative;
       font-weight: 600;
       white-space: nowrap;
+    }
+    .symbol-wrapper {
+      position: relative;
+      display: inline-block;
+      cursor: pointer;
     }
     .symbol-ticker {
       color: #667eea;
@@ -236,9 +242,10 @@ import { ApiService } from '../services/api.service';
     /* ── Prediction tooltip ── */
     .prediction-tooltip {
       position: absolute;
-      top: 0;
-      left: calc(100% + 8px);
-      z-index: 1000;
+      top: 50%;
+      left: calc(100% + 12px);
+      transform: translateY(-20%);
+      z-index: 9999;
       width: 420px;
       background: #1e293b;
       color: #e2e8f0;
