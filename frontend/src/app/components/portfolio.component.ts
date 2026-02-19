@@ -455,13 +455,25 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       this.activeHolding.showTooltip = false;
     }
 
-    // Position popup below/right of the clicked button
+    // Position popup beside the clicked button (position:fixed → viewport coords,
+    // so do NOT add window.scrollY — getBoundingClientRect() is already viewport-relative)
     const btn = event.currentTarget as HTMLElement;
     const rect = btn.getBoundingClientRect();
-    const popupWidth = 460;
-    const fitsRight  = rect.right + 8 + popupWidth <= window.innerWidth;
+    const popupWidth  = 460;
+    const popupHeight = 440;
+
+    // Horizontal: prefer right of button, flip left if not enough room
+    const fitsRight = rect.right + 8 + popupWidth <= window.innerWidth;
     this.popupLeft = Math.max(8, fitsRight ? rect.right + 8 : rect.left - popupWidth - 8);
-    this.popupTop  = Math.min(rect.bottom + window.scrollY + 4, window.scrollY + window.innerHeight - 440);
+
+    // Vertical: prefer below button, flip above if not enough room below
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow >= popupHeight) {
+      this.popupTop = rect.bottom + 4;
+    } else {
+      // Not enough space below — place above the button
+      this.popupTop = Math.max(8, rect.top - popupHeight - 4);
+    }
 
     this.activeHolding = holding;
     holding.showTooltip = true;
