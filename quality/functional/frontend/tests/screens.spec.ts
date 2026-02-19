@@ -147,8 +147,12 @@ test.describe('Frontend screen coverage', () => {
         console.log(`Prediction table has ${rowCount} rows`);
         expect(rowCount).toBeGreaterThan(0);
 
-        // First row should have a price cell
-        await expect(rows.first().locator('.pred-price')).toBeVisible();
+        // First row should have a non-empty price cell (text contains $ and digits)
+        const firstPriceCell = rows.first().locator('.pred-price');
+        await expect(firstPriceCell).toBeVisible();
+        const priceText = (await firstPriceCell.textContent() || '').trim();
+        console.log(`First predicted price cell text: "${priceText}"`);
+        expect(priceText).toMatch(/^\$[\d,]+\.\d{2}$/);  // e.g. "$262.38"
       }
 
       // Button should now be green (open state)

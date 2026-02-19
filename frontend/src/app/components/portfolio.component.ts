@@ -310,7 +310,10 @@ import { ApiService } from '../services/api.service';
     /* ── Prediction table inside tooltip ── */
     .pred-table {
       width: 100%; border-collapse: collapse;
+      /* Override global table { background: white } — keeps the overlay's dark bg visible */
+      background: transparent;
     }
+    .pred-table tbody tr:hover { background: rgba(255,255,255,0.06); } /* override global white hover */
     .pred-table thead tr { background: #263248; }
     .pred-table th {
       padding: 7px 10px; color: #94a3b8;
