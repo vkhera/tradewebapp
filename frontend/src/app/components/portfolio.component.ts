@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy, Inject, PLATFORM_ID, HostListener } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { Router } from '@angular/router';
 import { ApiService } from '../services/api.service';
 
 @Component({
@@ -382,6 +383,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   constructor(
     private apiService: ApiService,
+    private router: Router,
     @Inject(PLATFORM_ID) private platformId: Object
   ) {}
 
@@ -395,6 +397,9 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       const clientId = localStorage.getItem('clientId');
       if (clientId) {
         this.loadPortfolio(parseInt(clientId));
+      } else {
+        // No session — redirect to login
+        this.router.navigate(['/login']);
       }
     }
   }
