@@ -1,0 +1,84 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  All-in-one image: PostgreSQL 16 + Redis 7 + Spring Boot 3 + Angular/nginx
+#
+#  Starts 4 processes via supervisord.
+#  Usage (run on any machine with Docker installed):
+#
+#    docker run -d -p 80:80 --name stockapp vkdocker/stock-brokerage-allinone
+#    # wait ~90 s, then open http://localhost
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── Stage 1: Build Spring Boot JAR ─────────────────────────────────────────
+FROM maven:3.9-eclipse-temurin-21 AS backend-build
+WORKDIR /workspace
+COPY pom.xml .
+RUN mvn -B dependency:go-offline -q
+COPY src ./src
+RUN mvn -B package -DskipTests -q
+
+# ── Stage 2: Build Angular ──────────────────────────────────────────────────
+FROM node:18-alpine AS frontend-build
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm ci --quiet
+COPY frontend/ .
+RUN npx ng build --configuration=production --prerender=false
+
+# ── Stage 3: All-in-one runtime ─────────────────────────────────────────────
+FROM ubuntu:24.04
+
+# Avoid interactive prompts during apt
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install: PostgreSQL 16, Redis, OpenJDK 21, nginx, supervisor, utilities
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        postgresql-16 \
+        redis-server \
+        openjdk-21-jre-headless \
+        nginx \
+        supervisor \
+        curl \
+        wget \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Copy application artifacts ───────────────────────────────────────────────
+WORKDIR /app
+
+# Spring Boot fat JAR
+COPY --from=backend-build /workspace/target/stock-brokerage-*.jar /app/backend.jar
+
+# Angular browser build
+COPY --from=frontend-build /app/dist/stock-brokerage-ui/browser /usr/share/nginx/html/
+
+# Throttle config (live-editable via volume mount at runtime)
+COPY config /app/config
+
+# ── nginx config (proxy to localhost:8080 instead of backend:8080) ───────────
+COPY nginx-allinone.conf /etc/nginx/sites-available/default
+
+# ── supervisord config ───────────────────────────────────────────────────────
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# ── Entrypoint (init postgres user/db on first boot) ───────────────────────
+COPY docker-entrypoint-allinone.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# ── Log directories ──────────────────────────────────────────────────────────
+RUN mkdir -p /var/log/supervisor /app/logs
+
+# ── Spring Boot connection settings (all services are on localhost) ──────────
+ENV DB_HOST=localhost \
+    DB_PORT=5432 \
+    DB_USER=stockuser \
+    DB_PASS=stockpass \
+    REDIS_HOST=localhost \
+    REDIS_PORT=6379 \
+    JAVA_OPTS=""
+
+# ── Expose only the nginx port ───────────────────────────────────────────────
+# (PostgreSQL :5432 and Redis :6379 are internal-only — not exposed)
+EXPOSE 80
+
+ENTRYPOINT ["/entrypoint.sh"]
