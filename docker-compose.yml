@@ -31,6 +31,50 @@ services:
       timeout: 5s
       retries: 5
 
+  # ─── Spring Boot backend ───────────────────────────────────────────────────
+  backend:
+    image: vkdocker/stock-brokerage-backend:latest
+    container_name: stockbrokerage-backend
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: stockuser
+      DB_PASS: stockpass
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # Optional JVM flags (e.g. "-Xmx512m")
+      JAVA_OPTS: ""
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount live-editable throttle config — edit on host, reloaded within 60 s
+      - ./config:/app/config:ro
+      - app_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    restart: unless-stopped
+
+  # ─── Angular frontend (served by nginx + API proxy) ───────────────────────
+  frontend:
+    image: vkdocker/stock-brokerage-frontend:latest
+    container_name: stockbrokerage-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
+  app_logs:

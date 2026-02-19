@@ -45,8 +45,10 @@ export interface Rule {
   providedIn: 'root'
 })
 export class ApiService {
-  private baseUrl = 'http://localhost:8080/api';
-  private adminUrl = 'http://localhost:8080/api/admin';
+  // Relative URLs work both with `ng serve --proxy-config proxy.conf.json` (local dev)
+  // and with the nginx reverse-proxy in the Docker deployment.
+  private baseUrl = '/api';
+  private adminUrl = '/api/admin';
   
   private getHttpOptions() {
     const headers: any = {

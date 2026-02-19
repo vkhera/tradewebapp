@@ -14,9 +14,9 @@ spring:
     name: stock-brokerage
   
   datasource:
-    url: jdbc:postgresql://localhost:5432/stockdb
-    username: stockuser
-    password: stockpass
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/stockdb
+    username: ${DB_USER:stockuser}
+    password: ${DB_PASS:stockpass}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -39,8 +39,8 @@ spring:
         order_updates: true
         
   redis:
-    host: localhost
-    port: 6379
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
     timeout: 2000ms
     
   cache:

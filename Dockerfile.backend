@@ -1,0 +1,38 @@
+# ──────────────────────────────────────────────
+# Stage 1 – Build the JAR with Maven + JDK 21
+# ──────────────────────────────────────────────
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /workspace
+
+# Cache Maven dependencies separately from source changes
+COPY pom.xml .
+RUN mvn -B dependency:go-offline -q
+
+# Copy source and build
+COPY src ./src
+RUN mvn -B package -DskipTests -q
+
+# ──────────────────────────────────────────────
+# Stage 2 – Lean JRE runtime image
+# ──────────────────────────────────────────────
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+
+# Non-root user for security
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# Copy the fat JAR
+COPY --from=build /workspace/target/stock-brokerage-*.jar app.jar
+
+# Copy the live-reloadable throttle config (can be overridden by volume mount)
+COPY config ./config
+
+# Ensure log directory exists and is writable
+RUN mkdir -p /app/logs && chown -R appuser:appgroup /app
+
+USER appuser
+
+EXPOSE 8080
+
+# Allow JVM tuning via JAVA_OPTS env var
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
