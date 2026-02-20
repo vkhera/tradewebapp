@@ -495,7 +495,9 @@ export class PortfolioComponent implements OnInit, OnDestroy {
           : '';
 
         const currentPrice: number = data.currentPrice || holding.currentPrice;
-        holding.predictions = (data.hourlyPredictions || []).map((p: any) => {
+        holding.predictions = (data.hourlyPredictions || [])
+          .filter((p: any) => this.isDuringMarketHours(p.targetHour))
+          .map((p: any) => {
           const predicted: number = p.predictedPrice;
           const change = currentPrice > 0
             ? ((predicted - currentPrice) / currentPrice) * 100
@@ -532,6 +534,24 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   }
 
   // ── Utilities ───────────────────────────────────────────────────────────────
+
+  /**
+   * Returns true if the targetHour falls within NYSE market hours:
+   * 9:30 AM – 4:00 PM Eastern Time.
+   *
+   * targetHour is a LocalDateTime from the backend serialised without timezone
+   * (e.g. "2026-02-19T10:30:00"), so we parse the time component directly from
+   * the ISO string to avoid browser-timezone conversion errors.
+   */
+  private isDuringMarketHours(isoString: string): boolean {
+    if (!isoString) return false;
+    // Extract "HH:MM" from position 11 – avoids new Date() timezone shift
+    const timePart = isoString.substring(11, 16);   // e.g. "09:30"
+    const [hStr, mStr] = timePart.split(':');
+    const totalMinutes = parseInt(hStr, 10) * 60 + parseInt(mStr, 10);
+    // 9:30 AM ET = 570 min,  4:00 PM ET (exclusive) = 960 min
+    return totalMinutes >= 570 && totalMinutes < 960;
+  }
 
   private formatHour(isoString: string): string {
     if (!isoString) return '';
