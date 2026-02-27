@@ -56,6 +56,20 @@ public class ImportService {
             int tradeCount = trades.size();
             tradeRepository.deleteAll(trades);
             log.info("Deleted {} trade entries for client {}", tradeCount, clientId);
+
+            // Reset account cash balance and client opening balance to zero so that
+            // the portfolio page shows $0 after cleanup (not the pre-import balance).
+            accountRepository.findByClientId(clientId).ifPresent(account -> {
+                account.setCashBalance(BigDecimal.ZERO);
+                account.setReservedBalance(BigDecimal.ZERO);
+                accountRepository.save(account);
+                log.info("Reset account balances to zero for client {}", clientId);
+            });
+            clientRepository.findById(clientId).ifPresent(client -> {
+                client.setAccountBalance(BigDecimal.ZERO);
+                clientRepository.save(client);
+                log.info("Reset opening balance to zero for client {}", clientId);
+            });
             
             response.setSuccess(true);
             response.setMessage("Cleanup completed successfully");

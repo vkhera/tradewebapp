@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { TradeComponent } from './components/trade.component';
 import { AdminClientsComponent } from './components/admin-clients.component';
 import { AdminRulesComponent } from './components/admin-rules.component';
+import { AdminClientHoldingsComponent } from './components/admin-client-holdings.component';
 import { LoginComponent } from './components/login.component';
 import { PortfolioComponent } from './components/portfolio.component';
 import { FundAccountComponent } from './components/fund-account.component';
@@ -23,7 +24,8 @@ export const routes: Routes = [
   { path: 'fund-account',      component: FundAccountComponent,      canActivate: [authGuard] },
   { path: 'import-data',       component: ImportDataComponent,       canActivate: [authGuard] },
   { path: 'suggested-trades',  component: SuggestedTradesComponent,  canActivate: [authGuard] },
-  { path: 'admin/clients',     component: AdminClientsComponent,     canActivate: [adminGuard] },
-  { path: 'admin/rules',       component: AdminRulesComponent,       canActivate: [adminGuard] },
+  { path: 'admin/clients',     component: AdminClientsComponent,          canActivate: [adminGuard] },
+  { path: 'admin/rules',       component: AdminRulesComponent,            canActivate: [adminGuard] },
+  { path: 'admin/holdings',    component: AdminClientHoldingsComponent,   canActivate: [adminGuard] },
   { path: '**', redirectTo: '/login' }
 ];

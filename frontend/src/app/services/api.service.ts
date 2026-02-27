@@ -162,6 +162,10 @@ export class ApiService {
     return this.http.get<any>(`${this.baseUrl}/portfolio/client/${clientId}/summary`, this.getHttpOptions());
   }
 
+  getAllClientHoldings(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.adminUrl}/portfolio/all-holdings`, this.getHttpOptions());
+  }
+
   // Account APIs
   getAccount(clientId: number): Observable<any> {
     return this.http.get<any>(`${this.baseUrl}/account/client/${clientId}`, this.getHttpOptions());

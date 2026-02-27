@@ -23,6 +23,7 @@
     "api:perf:load": "tools\\k6\\k6-v1.6.1-windows-amd64\\k6.exe run ./performance/api/api-load.k6.js",
     "quality:all": "npm-run-all -s quality:backend quality:frontend security:static security:deps frontend:test:postbuild api:functional api:perf:smoke",
     "frontend:test:docker": "cross-env PLAYWRIGHT_BASE_URL=http://localhost playwright test --config ./functional/frontend/playwright.config.ts",
+    "frontend:test:https": "cross-env PLAYWRIGHT_BASE_URL=https://localhost PLAYWRIGHT_HTTPS_URL=https://localhost playwright test --config ./functional/frontend/playwright.config.ts",
     "frontend:test:portfolio": "cross-env PLAYWRIGHT_BASE_URL=http://localhost playwright test --config ./functional/frontend/playwright.config.ts functional/frontend/tests/portfolio-integrity.spec.ts",
     "api:functional:docker": "tools\\k6\\k6-v1.6.1-windows-amd64\\k6.exe run -e BASE_URL=http://localhost:8080 -e P95_THRESHOLD=4000 ./functional/api/api-functional.k6.js",
     "test:docker": "npm-run-all -s frontend:test:docker api:functional:docker"

@@ -86,9 +86,9 @@ public class StockMarketDataService {
         }
 
         try {
-            // Check cache freshness - only use if < 5 min old (matches bar interval)
+            // Check cache freshness - use if < 60 min old (1-hour window keeps ATR stable)
             FileTime lastModified = Files.getLastModifiedTime(csvPath);
-            Instant cutoff = Instant.now().minusSeconds(300); // 5 minutes
+            Instant cutoff = Instant.now().minusSeconds(3600); // 60 minutes
             if (lastModified.toInstant().isBefore(cutoff)) {
                 return List.of(); // stale, force refresh
             }
