@@ -1,5 +1,5 @@
 /**
- * Portfolio page data-integrity tests – client1
+ * Portfolio page data-integrity tests – client5
  *
  * Run against the live Docker stack:
  *   npm run frontend:test:docker --prefix quality
@@ -18,30 +18,32 @@ import { test, expect, Page, APIRequestContext } from '@playwright/test';
 
 // ── Auth helpers ─────────────────────────────────────────────────────────────
 
-const CLIENT1_ID   = 1;
-const CLIENT1_B64  = Buffer.from('client1:pass1234').toString('base64');
+const CLIENT5_ID   = 5;
+const CLIENT5_B64  = Buffer.from('client5:pass1234').toString('base64');
+const ADMIN_B64    = Buffer.from('admin1:pass1234').toString('base64');
+const ACTIVITY_CSV = 'GeneratedActivity-IRA94178.csv';
 
-/** Inject a client1 session into localStorage before Angular boots. */
-async function bootstrapClient1(page: Page) {
+/** Inject a client5 session into localStorage before Angular boots. */
+async function bootstrapClient5(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem('currentUser', JSON.stringify({
-      username: 'client1',
+      username: 'client5',
       password: 'pass1234',
       role: 'CLIENT',
-      clientId: 1
+      clientId: 5
     }));
     localStorage.setItem('role', 'CLIENT');
-    localStorage.setItem('clientId', '1');
+    localStorage.setItem('clientId', '5');
   });
 }
 
 /**
  * Calls the portfolio summary API directly and returns the number of holdings
- * that the backend (and therefore the database) reports for client1.
+ * that the backend (and therefore the database) reports for client5.
  */
 async function fetchApiHoldingCount(request: APIRequestContext): Promise<number> {
-  const resp = await request.get(`/api/portfolio/client/${CLIENT1_ID}/summary`, {
-    headers: { Authorization: `Basic ${CLIENT1_B64}` },
+  const resp = await request.get(`/api/portfolio/client/${CLIENT5_ID}/summary`, {
+    headers: { Authorization: `Basic ${CLIENT5_B64}` },
     timeout: 20_000
   });
   expect(resp.ok(), `API returned ${resp.status()} – is the backend running?`).toBeTruthy();
@@ -57,23 +59,70 @@ const dataRows = (page: Page) =>
 
 /** Wait until the portfolio table has finished loading (cash summary is the sentinel). */
 async function waitForPortfolioTable(page: Page) {
-  await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 20_000 });
-  await expect(dataRows(page).first()).toBeVisible({ timeout: 20_000 });
+  // Allow up to 90 s – beforeAll warm-up should ensure the backend is already primed
+  await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 90_000 });
+  await expect(dataRows(page).first()).toBeVisible({ timeout: 90_000 });
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-test.describe('Portfolio page – data integrity (client1)', () => {
+test.describe('Portfolio page – data integrity (client5)', () => {
 
+  // Set up client5 data ONCE before any test runs:
+  //   1. Clean up any pre-existing holdings/trades for client5.
+  //   2. Import activity from the generated CSV to populate the portfolio.
+  //   3. Warm up the ATR cache so page tests don't timeout on first load.
+  test.beforeAll(async ({ request }) => {
+    test.setTimeout(200_000);
+
+    // 1. Clean up – ensures a deterministic starting state
+    console.log('[setup] Cleaning up client5 data…');
+    const cleanResp = await request.delete('/api/import/cleanup', {
+      headers: { Authorization: `Basic ${ADMIN_B64}`, 'Content-Type': 'application/json' },
+      data: { clientId: CLIENT5_ID }
+    });
+    console.log(`[setup] Cleanup responded with ${cleanResp.status()}`);
+
+    // 2. Import activity CSV to populate client5's portfolio
+    console.log(`[setup] Importing ${ACTIVITY_CSV} for client5…`);
+    const importResp = await request.post('/api/import/activity', {
+      headers: { Authorization: `Basic ${ADMIN_B64}`, 'Content-Type': 'application/json' },
+      data: { clientId: CLIENT5_ID, fileName: ACTIVITY_CSV }
+    });
+    const importBody = await importResp.json().catch(() => ({}));
+    console.log(`[setup] Import responded with ${importResp.status()}:`, JSON.stringify(importBody));
+    expect(importResp.ok(), `Activity import failed: ${importResp.status()}`).toBeTruthy();
+
+    // 3. Poll until ReconciliationService (runs every 60 s) has rebuilt the portfolio.
+    //    importActivity only creates Trade records; portfolio rows appear after the next cycle.
+    console.log('[warmup] Waiting for ReconciliationService to populate client5 portfolio…');
+    let holdingCount = 0;
+    const pollDeadline = Date.now() + 90_000;
+    while (holdingCount === 0 && Date.now() < pollDeadline) {
+      const pollResp = await request.get(`/api/portfolio/client/${CLIENT5_ID}/summary`, {
+        headers: { Authorization: `Basic ${CLIENT5_B64}` },
+        timeout: 30_000
+      });
+      if (pollResp.ok()) {
+        const body = await pollResp.json().catch(() => ({ holdings: [] }));
+        holdingCount = ((body.holdings ?? []) as unknown[]).length;
+      }
+      if (holdingCount === 0) {
+        console.log('[warmup] Portfolio still empty – waiting 5 s for reconciliation…');
+        await new Promise(r => setTimeout(r, 5_000));
+      }
+    }
+    console.log(`[warmup] Portfolio ready: ${holdingCount} holdings found`);
+  });
   // ── 1. Row count matches database ─────────────────────────────────────────
 
   test('UI row count matches API / database holding count', async ({ page, request }) => {
     // Ask the backend first (before the page loads) so we have the ground truth.
     const dbCount = await fetchApiHoldingCount(request);
-    console.log(`[API] client1 has ${dbCount} holdings in the database`);
+    console.log(`[API] client5 has ${dbCount} holdings in the database`);
     expect(dbCount, 'Database reports zero holdings – import may not have run').toBeGreaterThan(0);
 
-    await bootstrapClient1(page);
+    await bootstrapClient5(page);
     await page.goto('/portfolio');
     await waitForPortfolioTable(page);
 
@@ -91,7 +140,7 @@ test.describe('Portfolio page – data integrity (client1)', () => {
   // ── 2. No empty rows ──────────────────────────────────────────────────────
 
   test('no row is empty – symbol, quantity, avg price and current price are all populated', async ({ page }) => {
-    await bootstrapClient1(page);
+    await bootstrapClient5(page);
     await page.goto('/portfolio');
     await waitForPortfolioTable(page);
 
@@ -136,13 +185,16 @@ test.describe('Portfolio page – data integrity (client1)', () => {
   // ── 3. Row count is stable through a ReconciliationService cycle ──────────
 
   test('row count remains stable after 70 s reconciliation cycle', async ({ page, request }) => {
-    // This test intentionally outlasts the default 60 s timeout.
-    test.setTimeout(150_000);
+    // This test intentionally outlasts the default 120 s timeout.
+    // It waits 70 s for a reconciliation cycle, then reloads the portfolio.
+    // If the price cache has expired during the wait, yield up to 180 s extra
+    // for Yahoo Finance to re-fetch prices for all holdings.
+    test.setTimeout(300_000);
 
     const dbCount = await fetchApiHoldingCount(request);
     console.log(`[API] ${dbCount} holdings before reconciliation wait`);
 
-    await bootstrapClient1(page);
+    await bootstrapClient5(page);
     await page.goto('/portfolio');
     await waitForPortfolioTable(page);
 
@@ -166,7 +218,7 @@ test.describe('Portfolio page – data integrity (client1)', () => {
   // ── 4. Filter bar works correctly ─────────────────────────────────────────
 
   test('filter bar is visible and reduces / restores displayed rows', async ({ page }) => {
-    await bootstrapClient1(page);
+    await bootstrapClient5(page);
     await page.goto('/portfolio');
     await waitForPortfolioTable(page);
 
@@ -182,13 +234,13 @@ test.describe('Portfolio page – data integrity (client1)', () => {
     await expect(countBadge).toContainText(`${totalRows} / ${totalRows}`);
     await expect(clearBtn).not.toBeVisible(); // no filter yet → no clear button
 
-    // Type a prefix that exists in client1's portfolio ('NV' matches NVDA at minimum)
+    // Type a prefix that exists in client5's portfolio ('NV' matches NVDA)
     await filterInput.fill('NV');
     await expect(countBadge).not.toContainText(`${totalRows} / ${totalRows}`, { timeout: 3_000 });
 
     const filteredRows = await rows.count();
     console.log(`[UI]  Rows after filter "NV": ${filteredRows} of ${totalRows}`);
-    expect(filteredRows, 'Filter reduced to 0 rows – check if NVDA is in client1 portfolio').toBeGreaterThan(0);
+    expect(filteredRows, 'Filter reduced to 0 rows – check if NVDA is in client5 portfolio').toBeGreaterThan(0);
     expect(filteredRows).toBeLessThan(totalRows);
     await expect(countBadge).toContainText(`${filteredRows} / ${totalRows}`);
 
@@ -209,9 +261,9 @@ test.describe('Portfolio page – data integrity (client1)', () => {
     // Filter with a value that should not match any symbol
     await filterInput.fill('ZZZNOEXIST');
     await page.waitForTimeout(300);
-    const noMatchMsg = page.locator('.no-match');
-    await expect(noMatchMsg).toBeVisible({ timeout: 3_000 });
-    await expect(noMatchMsg).toContainText('ZZZNOEXIST');
+    const noMatchRow = page.locator('td.no-match');
+    await expect(noMatchRow).toBeVisible({ timeout: 3_000 });
+    await expect(noMatchRow).toContainText('No holdings match');
     await expect(countBadge).toContainText(`0 / ${totalRows}`);
 
     console.log('[UI]  Filter bar behaviour verified ✓');

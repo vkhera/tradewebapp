@@ -24,13 +24,13 @@ const adminScreens: ScreenCheck[] = [
 async function bootstrapSession(page: Page, role: 'CLIENT' | 'ADMIN') {
   await page.addInitScript((assignedRole) => {
     localStorage.setItem('currentUser', JSON.stringify({
-      username: assignedRole === 'ADMIN' ? 'admin1' : 'client1',
+      username: assignedRole === 'ADMIN' ? 'admin1' : 'client5',
       password: 'pass1234',
       role: assignedRole,
-      clientId: assignedRole === 'ADMIN' ? null : 1
+      clientId: assignedRole === 'ADMIN' ? null : 5
     }));
     localStorage.setItem('role', assignedRole);
-    localStorage.setItem('clientId', assignedRole === 'ADMIN' ? '' : '1');
+    localStorage.setItem('clientId', assignedRole === 'ADMIN' ? '' : '5');
   }, role);
 }
 
@@ -77,7 +77,7 @@ test.describe('Frontend screen coverage', () => {
     await page.goto('/portfolio');
 
     await expect(page.getByRole('link', { name: /Portfolio/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /Trade/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Trade$/i })).toBeVisible();
     await expect(page.getByRole('link', { name: /Order History/i })).toBeVisible();
     await expect(page.getByRole('link', { name: /Fund Account/i })).toBeVisible();
     await expect(page.getByRole('link', { name: /Import Data/i })).toBeVisible();
@@ -92,12 +92,68 @@ test.describe('Frontend screen coverage', () => {
   });
 
   test.describe('Portfolio Predictions button', () => {
+
+    // Warm up the backend ONCE before any portfolio page tests run.
+    // On a cold start, ATR computation for the portfolio symbols can take several minutes.
+    // Also ensures client5's portfolio is populated via the activity CSV import.
+    test.beforeAll(async ({ request }) => {
+      test.setTimeout(300_000);
+      const CLIENT5_B64 = Buffer.from('client5:pass1234').toString('base64');
+      const ADMIN_B64   = Buffer.from('admin1:pass1234').toString('base64');
+      const ACTIVITY_CSV = 'GeneratedActivity-IRA94178.csv';
+
+      // Clean + import to ensure client5 has portfolio data
+      console.log('[setup] Cleaning up client5 data…');
+      await request.delete('/api/import/cleanup', {
+        headers: { Authorization: `Basic ${ADMIN_B64}`, 'Content-Type': 'application/json' },
+        data: { clientId: 5 }
+      });
+      console.log(`[setup] Importing ${ACTIVITY_CSV} for client5…`);
+      const importResp = await request.post('/api/import/activity', {
+        headers: { Authorization: `Basic ${ADMIN_B64}`, 'Content-Type': 'application/json' },
+        data: { clientId: 5, fileName: ACTIVITY_CSV }
+      });
+      console.log(`[setup] Import responded with ${importResp.status()}`);
+
+      // Poll until ReconciliationService (runs every 60 s) has rebuilt the portfolio.
+      // importActivity only creates Trade records; portfolio rows appear after the next cycle.
+      console.log('[warmup] Waiting for ReconciliationService to populate client5 portfolio…');
+      let holdingCount = 0;
+      const pollDeadline = Date.now() + 90_000;
+      while (holdingCount === 0 && Date.now() < pollDeadline) {
+        const pollResp = await request.get('/api/portfolio/client/5/summary', {
+          headers: { Authorization: `Basic ${CLIENT5_B64}` },
+          timeout: 30_000
+        });
+        if (pollResp.ok()) {
+          const body = await pollResp.json().catch(() => ({ holdings: [] }));
+          holdingCount = ((body.holdings ?? []) as unknown[]).length;
+        }
+        if (holdingCount === 0) {
+          console.log('[warmup] Portfolio still empty – waiting 5 s for reconciliation…');
+          await new Promise(r => setTimeout(r, 5_000));
+        }
+      }
+      console.log(`[warmup] Portfolio ready: ${holdingCount} holdings found`);
+
+      // Prime the predictions API for the first symbol so the popup opens fast
+      try {
+        const predResp = await request.get('/api/predictions/TNA', {
+          headers: { Authorization: `Basic ${CLIENT5_B64}` },
+          timeout: 60_000
+        });
+        console.log(`[warmup] Predictions API for TNA responded with ${predResp.status()}`);
+      } catch (e) {
+        console.warn('[warmup] Predictions warmup skipped:', e);
+      }
+    });
+
     test('Predictions button is visible for each holding row', async ({ page }) => {
       await bootstrapSession(page, 'CLIENT');
       await page.goto('/portfolio');
 
-      // Wait for portfolio table to load (cash summary is the first indicator)
-      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 15000 });
+      // Wait for portfolio table to load – allow extra time on a cold backend
+      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 60000 });
 
       // At least one Predictions button must be present
       const predButtons = page.getByRole('button', { name: /Predictions/i });
@@ -109,11 +165,13 @@ test.describe('Frontend screen coverage', () => {
     });
 
     test('Predictions button click opens popup with data', async ({ page }) => {
+      // Predictions computation can be slow on a cold backend – extend timeout
+      test.setTimeout(150_000);
       await bootstrapSession(page, 'CLIENT');
       await page.goto('/portfolio');
 
-      // Wait for portfolio table
-      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 15000 });
+      // Wait for portfolio table – allow extra time on a cold backend
+      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 60000 });
 
       const firstBtn = page.getByRole('button', { name: /Predictions/i }).first();
       await expect(firstBtn).toBeVisible({ timeout: 10000 });
@@ -129,10 +187,9 @@ test.describe('Frontend screen coverage', () => {
       // Click the button
       await firstBtn.click();
 
-      // Button turns amber (loading) then green (loaded)
-      // Wait for popup to appear
+      // Wait for popup to appear – cold prediction API can take up to 90 s
       const popup = page.locator('.pred-popup-overlay');
-      await expect(popup).toBeVisible({ timeout: 20000 });
+      await expect(popup).toBeVisible({ timeout: 90_000 });
 
       // Popup header should contain the symbol and "Price Forecasts"
       await expect(popup.locator('.tooltip-title')).toContainText('Price Forecasts');
@@ -193,29 +250,42 @@ test.describe('Frontend screen coverage', () => {
     });
 
     test('Predictions popup closes on outside click', async ({ page }) => {
+      test.setTimeout(150_000);
       await bootstrapSession(page, 'CLIENT');
       await page.goto('/portfolio');
 
-      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 15000 });
+      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 60000 });
       const firstBtn = page.getByRole('button', { name: /Predictions/i }).first();
       await firstBtn.click();
 
       const popup = page.locator('.pred-popup-overlay');
-      await expect(popup).toBeVisible({ timeout: 20000 });
-
-      // Click outside the popup (on the heading)
+      await expect(popup).toBeVisible({ timeout: 90_000 });
       await page.getByRole('heading', { name: 'My Portfolio' }).click();
       await expect(popup).not.toBeVisible({ timeout: 3000 });
     });
   });
 
-  // ── ATR(14) column tests ─────────────────────────────────────────────────
+  // ── ATR(14) column tests ─────────────────────────────────────────────────────────────────────────
   test.describe('Portfolio ATR(14) column', () => {
+
+    // Warm up the backend before ATR tests – the 5-min price cache may have
+    // expired since the Predictions warm-up if earlier tests took >5 minutes.
+    test.beforeAll(async ({ request }) => {
+      test.setTimeout(200_000);
+      const CLIENT5_B64 = Buffer.from('client5:pass1234').toString('base64');
+      console.log('[warmup-atr] Re-priming portfolio API before ATR tests …');
+      const resp = await request.get('/api/portfolio/client/5/summary', {
+        headers: { Authorization: `Basic ${CLIENT5_B64}` },
+        timeout: 190_000
+      });
+      console.log(`[warmup-atr] Portfolio API responded with ${resp.status()}`);
+    });
+
     test('ATR(14) column header is present in portfolio table', async ({ page }) => {
       await bootstrapSession(page, 'CLIENT');
       await page.goto('/portfolio');
 
-      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 15000 });
+      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 60000 });
 
       // Header with title attribute (set in the template)
       const atrHeader = page.locator('th[title*="Average True Range"]');
@@ -227,18 +297,18 @@ test.describe('Frontend screen coverage', () => {
       await bootstrapSession(page, 'CLIENT');
       await page.goto('/portfolio');
 
-      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 15000 });
+      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 60000 });
 
-      // Wait for rows to appear
+      // Wait for rows to appear – allow 30 s in case reconciliation service briefly clears holdings
       const rows = page.locator('tbody tr');
-      await expect(rows.first()).toBeVisible({ timeout: 10000 });
+      await expect(rows.first()).toBeVisible({ timeout: 30_000 });
 
       const rowCount = await rows.count();
       expect(rowCount).toBeGreaterThan(0);
 
-      // Every holding row must have an .atr-cell td
+      // Every holding row must have at least one .atr-cell td (first ATR14 column)
       for (let i = 0; i < rowCount; i++) {
-        const atrCell = rows.nth(i).locator('td.atr-cell');
+        const atrCell = rows.nth(i).locator('td.atr-cell').first();
         await expect(atrCell).toBeVisible();
       }
     });
@@ -247,12 +317,13 @@ test.describe('Frontend screen coverage', () => {
       await bootstrapSession(page, 'CLIENT');
       await page.goto('/portfolio');
 
-      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 15000 });
+      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 60000 });
 
       const rows = page.locator('tbody tr');
-      await expect(rows.first()).toBeVisible({ timeout: 10000 });
+      await expect(rows.first()).toBeVisible({ timeout: 30_000 });
 
-      const firstAtrCell = rows.first().locator('td.atr-cell');
+      // Use the FIRST atr-cell (ATR14 column) of the first row
+      const firstAtrCell = rows.first().locator('td.atr-cell').first();
       const cellText = (await firstAtrCell.textContent() || '').trim();
 
       console.log(`First ATR cell text: "${cellText}"`);
@@ -267,15 +338,13 @@ test.describe('Frontend screen coverage', () => {
       await bootstrapSession(page, 'CLIENT');
       await page.goto('/portfolio');
 
-      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 15000 });
+      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 60000 });
 
       const rows = page.locator('tbody tr');
-      await expect(rows.first()).toBeVisible({ timeout: 10000 });
-
-      // Find first row that has a rendered .atr-value (not a dash)
+      await expect(rows.first()).toBeVisible({ timeout: 30_000 });
       const rowCount = await rows.count();
       for (let i = 0; i < rowCount; i++) {
-        const atrValue = rows.nth(i).locator('.atr-value');
+        const atrValue = rows.nth(i).locator('td.atr-cell').first().locator('.atr-value');
         if (await atrValue.isVisible()) {
           // Must carry exactly one of the three colour classes
           const cls = await atrValue.getAttribute('class') || '';
@@ -283,8 +352,8 @@ test.describe('Frontend screen coverage', () => {
           console.log(`ATR cell class="${cls}"`);
           expect(hasColorClass).toBe(true);
 
-          // The percentage sub-label must also be visible
-          await expect(rows.nth(i).locator('.atr-pct')).toBeVisible();
+          // The percentage sub-label must also be visible in the ATR14 cell
+          await expect(rows.nth(i).locator('td.atr-cell').first().locator('.atr-pct')).toBeVisible();
           break;
         }
       }
@@ -294,8 +363,8 @@ test.describe('Frontend screen coverage', () => {
       await bootstrapSession(page, 'CLIENT');
       await page.goto('/portfolio');
 
-      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 15000 });
-      await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 60000 });
+      await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 30_000 });
 
       // Intercept the download
       const [download] = await Promise.all([
@@ -303,8 +372,10 @@ test.describe('Frontend screen coverage', () => {
         page.getByRole('button', { name: /Download CSV/i }).click()
       ]);
 
-      const csvText = await (await download.createReadStream()).read?.toString?.() ??
-        Buffer.from(await new Response((await download.createReadStream()) as any).arrayBuffer()).toString();
+      // Read via Node.js fs after saving to a temp path
+      const tmpPath = await download.path();
+      const fs = await import('fs');
+      const csvText = fs.readFileSync(tmpPath!, 'utf-8');
 
       console.log(`CSV first line: ${csvText.split('\n')[0]}`);
       expect(csvText).toContain('ATR(14)');
