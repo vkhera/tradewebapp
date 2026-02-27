@@ -1,0 +1,55 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Chaos Engineering overlay — adds Toxiproxy between backend and its dependencies.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.chaos.yml up -d
+#   powershell -ExecutionPolicy Bypass -File quality/chaos/chaos-tests.ps1
+#
+# To stop the chaos stack and return to normal:
+#   docker compose -f docker-compose.yml -f docker-compose.chaos.yml down
+#   docker compose up -d
+#
+# Topology injected by this overlay:
+#   Backend ──► toxiproxy:25432 ──► postgres:5432   (PostgreSQL)
+#   Backend ──► toxiproxy:26379 ──► redis:6379       (Redis)
+#   Host    ──► localhost:8474                       (Toxiproxy admin REST API)
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ─── Toxiproxy — network fault injection proxy ─────────────────────────────
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.9.0
+    container_name: stockbrokerage-toxiproxy
+    command: ["-host", "0.0.0.0", "-config", "/toxiproxy.json"]
+    ports:
+      - "8474:8474"   # admin REST API (used by chaos-tests.ps1)
+      - "25432:25432" # PostgreSQL proxy
+      - "26379:26379" # Redis proxy
+    volumes:
+      - ./quality/chaos/toxiproxy.json:/toxiproxy.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8474/proxies || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  # ─── Backend override — reroute DB and Redis through Toxiproxy ─────────────
+  backend:
+    environment:
+      DB_HOST: toxiproxy
+      DB_PORT: 25432
+      REDIS_HOST: toxiproxy
+      REDIS_PORT: 26379
+      SPRING_DATA_REDIS_HOST: toxiproxy
+      SPRING_DATA_REDIS_PORT: 26379
+    depends_on:
+      toxiproxy:
+        condition: service_healthy
