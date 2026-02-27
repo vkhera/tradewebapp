@@ -1,28 +1,28 @@
 package com.example.stockbrokerage.service;
 
 import com.example.stockbrokerage.client.MockYahooFinanceClient;
-import com.example.stockbrokerage.repository.StockPriceCacheRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
 
 /**
- * Verifies that {@link StockMarketDataService} mirrors price data to PostgreSQL
- * via {@link StockPriceCacheRepository#upsertBar} when prices are fetched and cached.
+ * Verifies that {@link StockMarketDataService} fetches, caches and serves 5-minute price bars.
  *
- * <p>The service caches prices to CSV (stock_predictions/{symbol}_prices.csv).
- * We delete those files before each test so the service always does a fresh Yahoo
- * Finance fetch, guaranteeing that saveToCsvCache (and thus upsertBar) is called.
+ * <p>DB mirroring (previously done inline per bar) was removed from the hot path and is now
+ * the sole responsibility of {@link DataSyncBatchService} (nightly batch at 2 AM).
+ * These tests therefore verify only the CSV-cache behaviour:
+ * <ul>
+ *   <li>A fresh fetch from the mock Yahoo client returns non-empty prices.</li>
+ *   <li>All returned prices are positive.</li>
+ *   <li>A second call for the same symbol is served from the CSV cache (no extra Yahoo call).</li>
+ *   <li>The {@code bars} limit is respected.</li>
+ * </ul>
  */
 class StockMarketDataServiceTest {
 
@@ -32,48 +32,51 @@ class StockMarketDataServiceTest {
     private static final String SYM_C = "SVCTEST_C";
 
     private StockMarketDataService service;
-    private StockPriceCacheRepository cacheRepository;
+    private MockYahooFinanceClient mockClient;
 
     @BeforeEach
     void setUp() throws Exception {
-        // Remove any stale CSV cache files so the service always fetches fresh data
+        // Remove any stale CSV cache files so the service always does a fresh fetch
         Files.createDirectories(Path.of("stock_predictions"));
         for (String sym : List.of(SYM_A, SYM_B, SYM_C)) {
             Files.deleteIfExists(Path.of("stock_predictions", sym + "_prices.csv"));
         }
-        MockYahooFinanceClient mockClient = new MockYahooFinanceClient();
-        cacheRepository = mock(StockPriceCacheRepository.class);
-        service = new StockMarketDataService(mockClient, cacheRepository);
+        mockClient = new MockYahooFinanceClient();
+        service = new StockMarketDataService(mockClient);
     }
 
     @Test
-    void getPrices_callsUpsertBarForEachPriceFetched() {
+    void getPrices_returnsPricesFromYahooClient() {
         List<BigDecimal> prices = service.getPrices(SYM_A, 10);
         assertThat(prices).isNotEmpty();
-
-        verify(cacheRepository, atLeast(prices.size()))
-            .upsertBar(eq(SYM_A), any(LocalDateTime.class), any(BigDecimal.class), any(LocalDateTime.class));
     }
 
     @Test
-    void getPrices_upsertBarReceivesCorrectSymbol() {
-        service.getPrices(SYM_B, 5);
-
-        ArgumentCaptor<String> symbolCaptor = ArgumentCaptor.forClass(String.class);
-        verify(cacheRepository, atLeastOnce())
-            .upsertBar(symbolCaptor.capture(), any(), any(), any());
-
-        assertThat(symbolCaptor.getAllValues()).allMatch(s -> s.equals(SYM_B));
+    void getPrices_allReturnedPricesArePositive() {
+        List<BigDecimal> prices = service.getPrices(SYM_B, 20);
+        assertThat(prices).allMatch(p -> p.compareTo(BigDecimal.ZERO) > 0);
     }
 
     @Test
-    void getPrices_upsertBarReceivesPositivePrices() {
-        service.getPrices(SYM_C, 5);
+    void getPrices_respectsBarsLimit() {
+        int limit = 5;
+        List<BigDecimal> prices = service.getPrices(SYM_C, limit);
+        assertThat(prices.size()).isLessThanOrEqualTo(limit);
+    }
 
-        ArgumentCaptor<BigDecimal> priceCaptor = ArgumentCaptor.forClass(BigDecimal.class);
-        verify(cacheRepository, atLeastOnce())
-            .upsertBar(any(), any(), priceCaptor.capture(), any());
+    @Test
+    void getPrices_secondCallServedFromCsvCache() throws Exception {
+        // First call populates the CSV cache
+        List<BigDecimal> first = service.getPrices(SYM_A, 10);
+        assertThat(first).isNotEmpty();
 
-        assertThat(priceCaptor.getAllValues()).allMatch(p -> p.compareTo(BigDecimal.ZERO) > 0);
+        // CSV file must now exist
+        Path csv = Path.of("stock_predictions", SYM_A + "_prices.csv");
+        assertThat(csv).exists();
+
+        // Second call should be served from the CSV (same data back)
+        List<BigDecimal> second = service.getPrices(SYM_A, 10);
+        assertThat(second).isNotEmpty();
+        assertThat(second.getLast()).isEqualByComparingTo(first.getLast());
     }
 }

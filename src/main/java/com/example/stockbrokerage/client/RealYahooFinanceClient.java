@@ -13,6 +13,7 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Live implementation of {@link YahooFinanceClient} that calls the public Yahoo Finance
@@ -29,6 +30,11 @@ public class RealYahooFinanceClient implements YahooFinanceClient {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /** Short-lived in-memory price cache: avoids redundant Yahoo HTTP calls within a 5-minute window. */
+    private record CachedPrice(BigDecimal price, long expiresAt) {}
+    private static final long PRICE_CACHE_TTL_MS = 5 * 60 * 1_000L; // 5 minutes
+    private final ConcurrentHashMap<String, CachedPrice> priceCache = new ConcurrentHashMap<>();
+
     public RealYahooFinanceClient() {
         this.restTemplate = new RestTemplate();
         this.restTemplate.getInterceptors().add((request, body, execution) -> {
@@ -43,14 +49,30 @@ public class RealYahooFinanceClient implements YahooFinanceClient {
 
     @Override
     public BigDecimal getCurrentPrice(String symbol) {
+        // Serve from in-memory cache if still fresh (eliminates redundant HTTP calls per portfolio load)
+        CachedPrice cached = priceCache.get(symbol);
+        if (cached != null && System.currentTimeMillis() < cached.expiresAt()) {
+            log.debug("Price cache hit for {}: {}", symbol, cached.price());
+            return cached.price();
+        }
+
         BigDecimal price = tryQuoteEndpoint(symbol);
-        if (price.compareTo(BigDecimal.ZERO) > 0) return price;
+        if (price.compareTo(BigDecimal.ZERO) > 0) {
+            priceCache.put(symbol, new CachedPrice(price, System.currentTimeMillis() + PRICE_CACHE_TTL_MS));
+            return price;
+        }
 
         price = tryChartEndpoint(symbol);
-        if (price.compareTo(BigDecimal.ZERO) > 0) return price;
+        if (price.compareTo(BigDecimal.ZERO) > 0) {
+            priceCache.put(symbol, new CachedPrice(price, System.currentTimeMillis() + PRICE_CACHE_TTL_MS));
+            return price;
+        }
 
         price = tryV6QuoteEndpoint(symbol);
-        if (price.compareTo(BigDecimal.ZERO) > 0) return price;
+        if (price.compareTo(BigDecimal.ZERO) > 0) {
+            priceCache.put(symbol, new CachedPrice(price, System.currentTimeMillis() + PRICE_CACHE_TTL_MS));
+            return price;
+        }
 
         log.warn("All Yahoo Finance price endpoints failed for symbol: {}", symbol);
         return BigDecimal.ZERO;

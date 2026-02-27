@@ -1,14 +1,12 @@
 package com.example.stockbrokerage.service;
 
 import com.example.stockbrokerage.client.MockYahooFinanceClient;
-import com.example.stockbrokerage.repository.StockPriceCacheRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 /**
  * Unit tests for {@link AtrService}.
@@ -25,8 +23,7 @@ class AtrServiceTest {
     @BeforeEach
     void setUp() {
         MockYahooFinanceClient mockClient = new MockYahooFinanceClient();
-        StockPriceCacheRepository mockCacheRepo = mock(StockPriceCacheRepository.class);
-        StockMarketDataService marketDataService = new StockMarketDataService(mockClient, mockCacheRepo);
+        StockMarketDataService marketDataService = new StockMarketDataService(mockClient);
         atrService = new AtrService(marketDataService);
     }
 

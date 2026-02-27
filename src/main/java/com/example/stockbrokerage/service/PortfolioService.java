@@ -28,8 +28,10 @@ public class PortfolioService {
     
     public List<PortfolioResponse> getClientPortfolio(Long clientId) {
         List<Portfolio> portfolios = portfolioRepository.findByClientId(clientId);
-        
-        return portfolios.stream()
+
+        // Parallel stream: fetches current prices + ATR for all holdings concurrently
+        // instead of sequentially, cutting wall-clock time from O(N × latency) → O(latency).
+        return portfolios.parallelStream()
             .map(this::convertToResponse)
             .collect(Collectors.toList());
     }
