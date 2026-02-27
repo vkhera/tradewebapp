@@ -94,16 +94,17 @@ interface ImportResponse {
         <h3>Cleanup Client Data</h3>
         <p>Remove all portfolio holdings and trade activity for a client before re-importing</p>
         
-        <div class="form-group">
-          <label>Client ID: <span *ngIf="!isAdmin" style="font-size:11px;color:#888">(locked to your account)</span></label>
+        <div class="form-group" *ngIf="isAdmin">
+          <label>Client ID:</label>
           <input 
             type="number" 
             [(ngModel)]="cleanupClientId" 
             placeholder="Enter Client ID"
-            [readonly]="!isAdmin"
-            [style.background]="!isAdmin ? '#f0f0f0' : ''"
             class="form-control">
         </div>
+        <p *ngIf="!isAdmin" style="font-size:13px;color:#555;margin-bottom:12px;">
+          Cleanup will apply to your own account only.
+        </p>
         
         <button 
           (click)="cleanupClient()" 

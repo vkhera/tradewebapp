@@ -37,6 +37,16 @@ export class AppComponent {
     return localStorage.getItem('role') === 'ADMIN';
   }
 
+  getUsername(): string {
+    if (!this.isBrowser()) return '';
+    try {
+      const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      return user.username || '';
+    } catch {
+      return '';
+    }
+  }
+
   toggleMenu(): void {
     this.menuOpen = !this.menuOpen;
   }
