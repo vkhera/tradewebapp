@@ -7,7 +7,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Hourly batch job that:
@@ -62,19 +61,25 @@ public class StockPricePredictionBatchService {
             }
         }
 
-        // Step 2: Calculate new predictions in parallel
-        List<CompletableFuture<Void>> futures = symbols.stream()
-            .map(symbol -> CompletableFuture.runAsync(() -> {
-                try {
-                    predictionService.calculateAndStore(symbol);
-                    log.debug("Completed price predictions for {}", symbol);
-                } catch (Exception e) {
-                    log.error("Error calculating predictions for {}: {}", symbol, e.getMessage());
-                }
-            }))
-            .toList();
-
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        // Step 2: Calculate new predictions sequentially with a 1-second pause between symbols.
+        // Previous parallel scatter hit all 58 symbols at once, immediately saturating
+        // StockPricePredictionService's rate limiter (4/s). Sequential approach takes ~1 min
+        // for 58 symbols — well within the 60-minute batch window.
+        for (String symbol : symbols) {
+            try {
+                predictionService.calculateAndStore(symbol);
+                log.debug("Completed price predictions for {}", symbol);
+            } catch (Exception e) {
+                log.error("Error calculating predictions for {}: {}", symbol, e.getMessage());
+            }
+            try {
+                Thread.sleep(1_000); // 1 s between stocks — respects rate limiter
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                log.warn("Prediction batch interrupted after symbol {}", symbol);
+                break;
+            }
+        }
 
         log.info("=== Hourly prediction batch complete for {} symbols ===", symbols.size());
     }
