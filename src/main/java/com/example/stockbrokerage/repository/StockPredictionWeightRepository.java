@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -19,6 +20,7 @@ public interface StockPredictionWeightRepository extends JpaRepository<StockPred
     List<StockPredictionWeight> findBySymbol(String symbol);
 
     /** Upsert: update weight and timestamp if row already exists. */
+    @Transactional
     @Modifying
     @Query(nativeQuery = true, value =
         "INSERT INTO stock_prediction_weight (symbol, technique, weight, last_updated) " +

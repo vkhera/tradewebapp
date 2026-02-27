@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -19,6 +20,7 @@ public interface StockPriceCacheRepository extends JpaRepository<StockPriceCache
     Optional<LocalDateTime> findLatestBarTime(@Param("symbol") String symbol);
 
     /** Insert a single bar, silently ignoring conflicts on (symbol, bar_time). */
+    @Transactional
     @Modifying
     @Query(nativeQuery = true, value =
         "INSERT INTO stock_price_cache (symbol, bar_time, close_price, synced_at) " +

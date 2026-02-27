@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +20,7 @@ public interface TrendPredictionWeightRepository extends JpaRepository<TrendPred
     List<TrendPredictionWeight> findBySymbol(String symbol);
 
     /** Upsert: update weight and date if row already exists. */
+    @Transactional
     @Modifying
     @Query(nativeQuery = true, value =
         "INSERT INTO trend_prediction_weight (symbol, technique, weight, last_updated) " +

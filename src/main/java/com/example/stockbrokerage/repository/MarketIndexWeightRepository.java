@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -22,6 +23,7 @@ public interface MarketIndexWeightRepository extends JpaRepository<MarketIndexWe
      * Insert or update a weight row.  Uses PostgreSQL's ON CONFLICT clause so the
      * call is idempotent regardless of whether the row already exists.
      */
+    @Transactional
     @Modifying
     @Query(nativeQuery = true, value = """
         INSERT INTO market_index_weight (symbol, index_symbol, weight, correlation, last_updated)

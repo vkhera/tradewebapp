@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -21,6 +22,7 @@ public interface TrendPredictionResultRepository extends JpaRepository<TrendPred
     Optional<TrendPredictionResult> findLatestBySymbol(@Param("symbol") String symbol);
 
     /** Full upsert – updates all fields when the same (symbol, date) is re-analysed. */
+    @Transactional
     @Modifying
     @Query(nativeQuery = true, value =
         "INSERT INTO trend_prediction_result " +
