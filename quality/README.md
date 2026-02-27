@@ -84,6 +84,67 @@ npm run api:perf:smoke
 npm run api:perf:load
 ```
 
+## Scheduled Docker Runner (dynamic runtime tests)
+
+An optional containerized scheduler runs dynamic runtime tests every few hours
+against the running Docker app services (`frontend` and `backend`).
+
+### What it runs every cycle
+
+- `frontend:test:docker`
+- `api:functional:docker:portable`
+- `api:perf:smoke:portable`
+
+Static analysis lanes (Checkstyle/Semgrep/dependency scans) are excluded from this scheduler.
+
+### Start scheduler profile
+
+From repository root:
+
+```bash
+docker compose --profile quality-scheduler up -d --build
+```
+
+This starts app dependencies plus `quality-scheduler`, which:
+
+- waits for backend health and frontend availability,
+- runs one suite immediately,
+- then runs again every `INTERVAL_SECONDS` (default `10800`, i.e., 3 hours).
+
+### Stop scheduler
+
+```bash
+docker compose --profile quality-scheduler stop quality-scheduler
+```
+
+### Scheduler logs
+
+Container stream:
+
+```bash
+docker logs -f stockbrokerage-quality-scheduler
+```
+
+Per-run report files on host:
+
+- `quality/reports/scheduled/hourly_suite_YYYYMMDD_HHMMSS.log`
+- `quality/reports/scheduled/latest-status.txt`
+
+Observability-shared JSON log on host (for Promtail/Loki ingestion):
+
+- `logs/quality-scheduler.json`
+
+### Configurable environment variables
+
+Set via `quality-scheduler` service in `docker-compose.yml`:
+
+- `INTERVAL_SECONDS` (default `10800`)
+- `RUN_IMMEDIATELY` (`true`/`false`)
+- `PLAYWRIGHT_BASE_URL` (default `http://frontend`)
+- `BASE_URL` (default `http://backend:8080`)
+- `P95_THRESHOLD` (default `4000`)
+- `OBS_LOG_FILE` (default `/workspace/tradewebapp/logs/quality-scheduler.json`)
+
 ## Coverage Implemented
 
 ### Frontend functional (post-build)

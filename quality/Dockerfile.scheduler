@@ -1,0 +1,22 @@
+FROM mcr.microsoft.com/playwright:v1.58.2-jammy
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG K6_VERSION=v1.6.1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openjdk-21-jdk maven python3-pip curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --no-cache-dir semgrep
+
+RUN curl -fsSL -o /tmp/k6.tar.gz "https://github.com/grafana/k6/releases/download/${K6_VERSION}/k6-${K6_VERSION}-linux-amd64.tar.gz" \
+    && tar -xzf /tmp/k6.tar.gz -C /tmp \
+    && install -m 0755 /tmp/k6-${K6_VERSION}-linux-amd64/k6 /usr/local/bin/k6 \
+    && rm -rf /tmp/k6* 
+
+WORKDIR /workspace/tradewebapp
+
+COPY scripts/hourly-quality-runner.sh /opt/quality/hourly-quality-runner.sh
+RUN chmod +x /opt/quality/hourly-quality-runner.sh
+
+ENTRYPOINT ["/opt/quality/hourly-quality-runner.sh"]

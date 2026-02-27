@@ -2,7 +2,8 @@
   "__inputs": [],
   "__requires": [
     { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "9.0.0" },
-    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" },
+    { "type": "datasource", "id": "loki", "name": "Loki", "version": "1.0.0" }
   ],
   "annotations": { "list": [] },
   "description": "Stock Brokerage – Spring Boot JVM, HTTP and database metrics via Micrometer + Prometheus",
@@ -435,6 +436,88 @@
       ],
       "title": "Process Start Time",
       "type": "stat"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
+      "id": 104,
+      "title": "Dynamic Test Scheduler",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "description": "Dynamic test scheduler successful cycle count in selected time range",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "green" },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 33 },
+      "id": 14,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value_and_name", "colorMode": "background" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({job=\"quality-scheduler\"} |= \"Dynamic suite passed\" [$__range]))",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Scheduler Pass Count",
+      "type": "stat"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "description": "Dynamic test scheduler failed cycle count in selected time range",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "red" },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 33 },
+      "id": 15,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value_and_name", "colorMode": "background" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({job=\"quality-scheduler\"} |= \"Dynamic suite failed\" [$__range]))",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Scheduler Fail Count",
+      "type": "stat"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "description": "Runtime scheduler logs including UI and API dynamic test output",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 37 },
+      "id": 16,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "expr": "{job=\"quality-scheduler\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Quality Scheduler Logs",
+      "type": "logs"
     }
 
   ],
@@ -469,5 +552,5 @@
   "timezone": "browser",
   "title": "Stock Brokerage – Spring Boot",
   "uid": "stock-brokerage-sb",
-  "version": 1
+  "version": 2
 }

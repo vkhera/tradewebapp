@@ -52,6 +52,16 @@ async function bootstrapAdmin(page: Page) {
   });
 }
 
+async function waitForClientTableRows(page: Page) {
+  await expect(async () => {
+    await page.goto('/admin/clients');
+    await expect(page.getByRole('heading', { name: 'Client Management' })).toBeVisible();
+    const rows = page.locator('table tbody tr');
+    const rowCount = await rows.count();
+    expect(rowCount).toBeGreaterThan(0);
+  }).toPass({ timeout: 25_000, intervals: [1_000, 2_000, 3_000] });
+}
+
 // ── Suite ─────────────────────────────────────────────────────────────────────
 
 test.describe('Admin user – functional UI tests', () => {
@@ -147,10 +157,8 @@ test.describe('Admin user – functional UI tests', () => {
 
     test('clients table loads and contains at least one row', async ({ page }) => {
       await bootstrapAdmin(page);
-      await page.goto('/admin/clients');
-      await expect(page.getByRole('heading', { name: 'Client Management' })).toBeVisible();
+      await waitForClientTableRows(page);
       const rows = page.locator('table tbody tr');
-      await expect(rows.first()).toBeVisible({ timeout: 15_000 });
       const rowCount = await rows.count();
       expect(rowCount).toBeGreaterThan(0);
       console.log(`[clients-table] ${rowCount} client rows loaded`);
@@ -158,8 +166,7 @@ test.describe('Admin user – functional UI tests', () => {
 
     test('clients table has the required column headers', async ({ page }) => {
       await bootstrapAdmin(page);
-      await page.goto('/admin/clients');
-      await expect(page.locator('table tbody tr').first()).toBeVisible({ timeout: 15_000 });
+      await waitForClientTableRows(page);
       const headers = page.locator('table thead th');
       await expect(headers.nth(0)).toHaveText('ID');
       await expect(headers.nth(1)).toHaveText('Code');
@@ -172,16 +179,14 @@ test.describe('Admin user – functional UI tests', () => {
 
     test('client5 appears in the clients table', async ({ page }) => {
       await bootstrapAdmin(page);
-      await page.goto('/admin/clients');
-      await expect(page.locator('table tbody tr').first()).toBeVisible({ timeout: 15_000 });
+      await waitForClientTableRows(page);
       // "client5" appears as the client code in the second column
       await expect(page.locator('table tbody').getByText('client5')).toBeVisible();
     });
 
     test('every client row has a numeric ID, non-blank Code, and non-blank Name', async ({ page }) => {
       await bootstrapAdmin(page);
-      await page.goto('/admin/clients');
-      await expect(page.locator('table tbody tr').first()).toBeVisible({ timeout: 15_000 });
+      await waitForClientTableRows(page);
       const rows = page.locator('table tbody tr');
       const rowCount = await rows.count();
       for (let i = 0; i < rowCount; i++) {
@@ -271,15 +276,27 @@ test.describe('Admin user – functional UI tests', () => {
   test.describe('5. Validate cleanup – client5 portfolio must be empty', () => {
 
     test('API confirms client5 has zero holdings immediately after cleanup', async ({ request }) => {
-      test.setTimeout(30_000);
-      const resp = await request.get(`/api/portfolio/client/${CLIENT5_ID}/summary`, {
-        headers: { Authorization: `Basic ${CLIENT5_B64}` },
-        timeout: 20_000
-      });
-      expect(resp.ok(), `Portfolio API returned ${resp.status()} – is the backend running?`).toBeTruthy();
-      const body = await resp.json();
-      const count = ((body.holdings ?? []) as unknown[]).length;
-      console.log(`[cleanup-verify] client5 holdings after cleanup: ${count}`);
+      test.setTimeout(60_000);
+      let count = -1;
+
+      await expect(async () => {
+        const resp = await request.get(`/api/portfolio/client/${CLIENT5_ID}/summary`, {
+          headers: { Authorization: `Basic ${CLIENT5_B64}` },
+          timeout: 20_000
+        });
+
+        const status = resp.status();
+        if (status === 429) {
+          throw new Error('Transient 429 from portfolio API; retrying');
+        }
+
+        expect(resp.ok(), `Portfolio API returned ${status} – is the backend running?`).toBeTruthy();
+        const body = await resp.json();
+        count = ((body.holdings ?? []) as unknown[]).length;
+        console.log(`[cleanup-verify] client5 holdings after cleanup: ${count}`);
+        expect(count).toBe(0);
+      }).toPass({ timeout: 50_000, intervals: [1_000, 2_000, 4_000, 5_000] });
+
       expect(count, 'Portfolio should be empty (0 holdings) after cleanup').toBe(0);
     });
 

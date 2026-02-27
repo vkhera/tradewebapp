@@ -116,6 +116,32 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ─── Hourly quality scheduler (optional profile) ──────────────────────────
+  quality-scheduler:
+    build:
+      context: ./quality
+      dockerfile: Dockerfile.scheduler
+    container_name: stockbrokerage-quality-scheduler
+    environment:
+      REPO_DIR: /workspace/tradewebapp
+      INTERVAL_SECONDS: 10800
+      RUN_IMMEDIATELY: "true"
+      PLAYWRIGHT_BASE_URL: http://frontend
+      BASE_URL: http://backend:8080
+      P95_THRESHOLD: 4000
+      INSTALL_PLAYWRIGHT_BROWSERS: "false"
+      OBS_LOG_FILE: /workspace/tradewebapp/logs/quality-scheduler.json
+    volumes:
+      - ./:/workspace/tradewebapp
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    restart: unless-stopped
+    profiles:
+      - quality-scheduler
+
 volumes:
   postgres_data:
   redis_data:

@@ -35,6 +35,32 @@ async function bootstrapSession(page: Page, role: 'CLIENT' | 'ADMIN') {
 }
 
 test.describe('Frontend screen coverage', () => {
+  test('admin can log in from login page and land on admin clients', async ({ page }) => {
+    await page.goto('/login');
+
+    await page.getByLabel('Username').fill('admin1');
+    await page.getByLabel('Password').fill('pass1234');
+    await page.getByRole('button', { name: 'Login' }).click();
+
+    await expect(page).toHaveURL(/\/admin\/clients/);
+    await expect(page.getByRole('heading', { name: 'Client Management' })).toBeVisible();
+  });
+
+  test('activity file upload flow sets filename and enables import action', async ({ page }) => {
+    await bootstrapSession(page, 'CLIENT');
+    await page.goto('/import-data');
+
+    const activityUploadInput = page.locator('input[type="file"]').nth(1);
+    await activityUploadInput.setInputFiles({
+      name: 'activity-upload-test.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('Date,Action,Symbol,Quantity,Price\n2026-02-27,BUY,TQQQ,1,10.00\n')
+    });
+
+    await expect(page.locator('.drop-zone-filename').nth(1)).toContainText('.csv', { timeout: 15000 });
+    await expect(page.getByRole('button', { name: 'Import Activity' })).toBeEnabled();
+  });
+
   test('login page renders and key controls are available', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: 'Stock Brokerage Login' })).toBeVisible();

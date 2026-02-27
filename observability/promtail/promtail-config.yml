@@ -62,3 +62,29 @@ scrape_configs:
       # This allows Grafana to regex-extract traceId from the raw JSON for
       # click-through trace correlation with Tempo.
       # To display only the human-readable message, use Grafana's "JSON" log format option.
+
+  # ── Quality scheduler JSON log ──────────────────────────────────────────────
+  - job_name: quality-scheduler
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: quality-scheduler
+          app: quality-scheduler
+          __path__: /app/logs/quality-scheduler.json
+
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            service: service
+            message: message
+            timestamp: timestamp
+
+      - labels:
+          level:
+          service:
+
+      - timestamp:
+          source: timestamp
+          format: RFC3339
