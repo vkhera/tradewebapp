@@ -21,6 +21,8 @@ import java.nio.file.*;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -479,11 +481,15 @@ public class StockPricePredictionService {
 
     // ============================================================= DB cached load
 
+    private static final ZoneId EASTERN = ZoneId.of("America/New_York");
+
     private StockPricePredictionResponse loadLatestFromDb(String symbol) {
         LocalDateTime cutoff     = LocalDateTime.now().minusMinutes(50);
         LocalDateTime nowHour    = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0);
-        LocalDateTime todayOpen  = LocalDate.now().atTime(9, 0);
-        LocalDateTime todayClose = LocalDate.now().atTime(16, 0);
+        // Use Eastern market hours converted to server UTC for DB queries
+        LocalDate todayET        = LocalDate.now(EASTERN);
+        LocalDateTime todayOpen  = todayET.atTime(9, 0).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
+        LocalDateTime todayClose = todayET.atTime(17, 0).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
 
         // Fetch all of today's market-hours predictions (past + future for today)
         List<StockPricePrediction> recs =
@@ -546,9 +552,9 @@ public class StockPricePredictionService {
      * Returns the previous business day's hourly predictions with actual prices filled in.
      */
     private List<HourlyPricePrediction> loadPreviousDayFromDb(String symbol) {
-        LocalDate prevDay      = getPreviousBusinessDay(LocalDate.now());
-        LocalDateTime prevOpen  = prevDay.atTime(9, 0);
-        LocalDateTime prevClose = prevDay.atTime(16, 0);
+        LocalDate prevDay      = getPreviousBusinessDay(LocalDate.now(EASTERN));
+        LocalDateTime prevOpen  = prevDay.atTime(9, 0).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
+        LocalDateTime prevClose = prevDay.atTime(17, 0).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
 
         List<StockPricePrediction> recs =
             repository.findBySymbolAndTargetHourBetweenOrderByTargetHourAsc(symbol, prevOpen, prevClose);

@@ -805,29 +805,36 @@ export class PortfolioComponent implements OnInit, OnDestroy {
    */
   private isDuringMarketHours(isoString: string): boolean {
     if (!isoString) return false;
-    // Extract "HH:MM" from position 11 – avoids new Date() timezone shift
-    const timePart = isoString.substring(11, 16);   // e.g. "09:30"
+    // The backend stores targetHour as UTC LocalDateTime (Docker container runs in UTC).
+    // Extract "HH:MM" directly from the ISO string to read the UTC hour.
+    const timePart = isoString.substring(11, 16);   // e.g. "14:30"
     const [hStr, mStr] = timePart.split(':');
     const totalMinutes = parseInt(hStr, 10) * 60 + parseInt(mStr, 10);
-    // 9:30 AM ET = 570 min,  4:00 PM ET (inclusive) = 960 min
-    return totalMinutes >= 570 && totalMinutes <= 960;
+    // NYSE market hours converted to UTC:
+    //   9:30 AM ET (EST=UTC-5) = 14:30 UTC = 870 min
+    //   9:30 AM ET (EDT=UTC-4) = 13:30 UTC = 810 min  ← use as lower bound to cover DST
+    //   4:00 PM ET (EST=UTC-5) = 21:00 UTC = 1260 min ← use as upper bound
+    //   4:00 PM ET (EDT=UTC-4) = 20:00 UTC = 1200 min
+    return totalMinutes >= 810 && totalMinutes <= 1260;
   }
 
   private formatHour(isoString: string): string {
     if (!isoString) return '';
-    // Parse time directly from the ISO string to avoid browser-timezone shift
-    const hStr = isoString.substring(11, 13);
-    const h = parseInt(hStr, 10);
-    const suffix = h >= 12 ? 'PM' : 'AM';
-    const hour12 = h % 12 || 12;
-    return `${hour12}:00 ${suffix}`;
+    // Backend sends UTC LocalDateTime without 'Z'; append 'Z' so the browser parses as UTC,
+    // then convert to Eastern Time for display.
+    const utcDate = new Date(isoString + 'Z');
+    return utcDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: 'America/New_York',
+      hour12: true
+    }).replace(':00', '');
   }
 
   private isPastHour(isoString: string): boolean {
     if (!isoString) return false;
-    // Compare wall-clock hour directly from the string to now
-    const target = new Date(isoString).getTime();
-    return target < Date.now();
+    // Append 'Z' so the ISO string is parsed as UTC, matching how the backend stores targetHour
+    return new Date(isoString + 'Z').getTime() < Date.now();
   }
 
   downloadCSV() {
