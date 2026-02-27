@@ -20,7 +20,7 @@ public class StockPricePredictionResponse {
 
     private LocalDateTime currentPriceAsOf;
 
-    /** Next 8 hours of predicted prices */
+    /** All market-hours predictions for today (9:30 AM – 4:00 PM) */
     private List<HourlyPricePrediction> hourlyPredictions;
 
     /** Current per-stock technique weights */
@@ -33,4 +33,13 @@ public class StockPricePredictionResponse {
     private boolean cached;
 
     private LocalDateTime calculatedAt;
+
+    /** Previous business day hourly predictions with actual prices */
+    private List<HourlyPricePrediction> previousDayPredictions;
+
+    /**
+     * Current influence of each tracked market index (IWM, QQQ, VOO, DIA, VXVY)
+     * on this stock's price prediction.  Populated on every fresh calculation.
+     */
+    private List<MarketIndexInfluence> indexInfluences;
 }

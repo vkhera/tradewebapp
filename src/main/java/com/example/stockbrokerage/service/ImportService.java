@@ -79,6 +79,7 @@ public class ImportService {
         int processed = 0;
         int imported = 0;
         int skipped = 0;
+        BigDecimal totalHoldingsCost = BigDecimal.ZERO;
         
         try {
             Optional<Client> clientOpt = clientRepository.findById(clientId);
@@ -183,6 +184,25 @@ public class ImportService {
                         }
                         
                         portfolioRepository.save(portfolio);
+
+                        // Create a corresponding EXECUTED BUY trade so the
+                        // ReconciliationService can rebuild this position correctly.
+                        LocalDateTime importTime = LocalDateTime.now();
+                        Trade trade = Trade.builder()
+                            .clientId(clientId)
+                            .symbol(symbol)
+                            .quantity(quantity.intValue())
+                            .price(price)
+                            .type(Trade.TradeType.BUY)
+                            .orderType(Trade.OrderType.MARKET)
+                            .status(Trade.TradeStatus.EXECUTED)
+                            .tradeTime(importTime)
+                            .fraudCheckPassed(true)
+                            .fraudCheckReason("Imported from CSV")
+                            .build();
+                        tradeRepository.save(trade);
+
+                        totalHoldingsCost = totalHoldingsCost.add(price.multiply(quantity));
                         imported++;
                         log.debug("Successfully saved holding: {} with {} shares", symbol, quantity);
                         
@@ -194,6 +214,18 @@ public class ImportService {
                 }
             }
             
+            // Update client opening balance so reconciliation keeps current cash.
+            // New opening balance = total cost of imported holdings + current cash balance.
+            // Then: expectedCash = openingBalance - totalBuys = currentCash. ✓
+            if (imported > 0) {
+                BigDecimal currentCash = account.getCashBalance();
+                BigDecimal newOpeningBalance = totalHoldingsCost.add(currentCash);
+                client.setAccountBalance(newOpeningBalance);
+                clientRepository.save(client);
+                log.info("Updated opening balance for client {} to {} (holdings cost={}, cash={})",
+                    clientId, newOpeningBalance, totalHoldingsCost, currentCash);
+            }
+
             response.setSuccess(true);
             response.setMessage("Holdings imported successfully");
             response.setRecordsProcessed(processed);

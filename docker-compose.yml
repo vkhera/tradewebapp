@@ -42,6 +42,12 @@ services:
       DB_PASS: stockpass
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # Explicitly set spring.data.redis.* for Spring Boot 3 reactive health indicator
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      # JVM timezone – must match the exchange timezone so market-hours logic is correct
+      TZ: America/New_York
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=America/New_York"
       # Traces – set if the observability stack is running alongside this app.
       # Tempo listens on host port 9411 (started via docker-compose.observability.yml).
       # TEMPO_HOST: host.docker.internal
@@ -54,6 +60,11 @@ services:
       # Mount live-editable throttle config — edit on host, reloaded within 60 s
       - ./config:/app/config:ro
       - app_logs:/app/logs
+      # Mount importexport directory so CSV files placed on the host are visible to the container
+      - ./importexport:/app/importexport
+      # Persist prediction CSV caches across container restarts
+      - ./stock_predictions:/app/stock_predictions
+      - ./trend_predictions:/app/trend_predictions
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,8 +84,35 @@ services:
     container_name: stockbrokerage-frontend
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      # Mount SSL certs: place real Let's Encrypt cert.pem + key.pem here.
+      # A self-signed cert is auto-generated on first start if this dir is empty.
+      - ./ssl:/etc/nginx/ssl
+      # Webroot for Let's Encrypt ACME challenge (certbot --webroot)
+      - ./certbot-webroot:/var/www/certbot:ro
     depends_on:
       backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── Daily PostgreSQL backup (runs pg_dump at 16:00 ET, keeps 7 dumps) ────
+  pgbackup:
+    image: postgres:16-alpine
+    container_name: stockbrokerage-pgbackup
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: stockuser
+      PGPASSWORD: stockpass
+      PGDATABASE: stockdb
+      TZ: America/New_York
+    volumes:
+      - ./backup:/backup
+      - ./pg-backup.sh:/pg-backup.sh:ro
+    entrypoint: ["/bin/sh", "/pg-backup.sh"]
+    depends_on:
+      postgres:
         condition: service_healthy
     restart: unless-stopped
 

@@ -6,13 +6,14 @@ type ScreenCheck = {
 };
 
 const clientScreens: ScreenCheck[] = [
-  { route: '/portfolio', heading: 'My Portfolio' },
-  { route: '/trade', heading: 'Execute Trade' },
-  { route: '/order-history', heading: 'Order History' },
-  { route: '/realized-gains', heading: 'Realized Gains/Losses' },
+  { route: '/portfolio',        heading: 'My Portfolio' },
+  { route: '/trade',            heading: 'Execute Trade' },
+  { route: '/order-history',    heading: 'Order History' },
+  { route: '/realized-gains',   heading: 'Realized Gains/Losses' },
   { route: '/unrealized-gains', heading: 'Unrealized Gains/Losses' },
-  { route: '/fund-account', heading: 'Fund Account' },
-  { route: '/import-data', heading: 'Import Portfolio Data' }
+  { route: '/fund-account',     heading: 'Fund Account' },
+  { route: '/import-data',      heading: 'Import Portfolio Data' },
+  { route: '/suggested-trades', heading: 'Suggested Trades' }
 ];
 
 const adminScreens: ScreenCheck[] = [
@@ -137,7 +138,7 @@ test.describe('Frontend screen coverage', () => {
       await expect(popup.locator('.tooltip-title')).toContainText('Price Forecasts');
 
       // Wait for table or no-data message (API response)
-      const predTable = popup.locator('.pred-table');
+      const predTable = popup.locator('.pred-table').first();
       const noData    = popup.locator('.tooltip-no-data');
       await expect(predTable.or(noData)).toBeVisible({ timeout: 20000 });
 
@@ -147,12 +148,37 @@ test.describe('Frontend screen coverage', () => {
         console.log(`Prediction table has ${rowCount} rows`);
         expect(rowCount).toBeGreaterThan(0);
 
-        // First row should have a non-empty price cell (text contains $ and digits)
+        // Table must have Hour, Predicted, Actual columns
+        const headers = predTable.locator('thead th');
+        await expect(headers.nth(0)).toHaveText('Hour');
+        await expect(headers.nth(1)).toContainText('Predicted');
+        await expect(headers.nth(2)).toContainText('Actual');
+
+        // First row predicted price cell must contain a dollar amount
         const firstPriceCell = rows.first().locator('.pred-price');
         await expect(firstPriceCell).toBeVisible();
         const priceText = (await firstPriceCell.textContent() || '').trim();
         console.log(`First predicted price cell text: "${priceText}"`);
         expect(priceText).toMatch(/^\$[\d,]+\.\d{2}$/);  // e.g. "$262.38"
+
+        // Actual column cell must exist (price or dash placeholder)
+        const firstActualCell = rows.first().locator('.pred-actual');
+        await expect(firstActualCell).toBeVisible();
+        console.log(`First actual cell: "${(await firstActualCell.textContent() || '').trim()}"`);
+
+        // Previous business day section (may be absent early in operations)
+        const prevSection = popup.locator('.prev-day-section');
+        const prevVisible = await prevSection.isVisible();
+        console.log(`Previous business day section visible: ${prevVisible}`);
+        if (prevVisible) {
+          await expect(popup.locator('.prev-day-title')).toContainText('Previous Business Day');
+          const prevTable = prevSection.locator('.prev-day-table');
+          await expect(prevTable).toBeVisible();
+          const prevHeaders = prevTable.locator('thead th');
+          await expect(prevHeaders.nth(0)).toHaveText('Hour');
+          await expect(prevHeaders.nth(1)).toContainText('Predicted');
+          await expect(prevHeaders.nth(2)).toContainText('Actual');
+        }
       }
 
       // Button should now be green (open state)
@@ -180,6 +206,109 @@ test.describe('Frontend screen coverage', () => {
       // Click outside the popup (on the heading)
       await page.getByRole('heading', { name: 'My Portfolio' }).click();
       await expect(popup).not.toBeVisible({ timeout: 3000 });
+    });
+  });
+
+  // ── ATR(14) column tests ─────────────────────────────────────────────────
+  test.describe('Portfolio ATR(14) column', () => {
+    test('ATR(14) column header is present in portfolio table', async ({ page }) => {
+      await bootstrapSession(page, 'CLIENT');
+      await page.goto('/portfolio');
+
+      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 15000 });
+
+      // Header with title attribute (set in the template)
+      const atrHeader = page.locator('th[title*="Average True Range"]');
+      await expect(atrHeader).toBeVisible({ timeout: 10000 });
+      await expect(atrHeader).toContainText('ATR(14)');
+    });
+
+    test('ATR(14) cell is rendered for each holding row', async ({ page }) => {
+      await bootstrapSession(page, 'CLIENT');
+      await page.goto('/portfolio');
+
+      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 15000 });
+
+      // Wait for rows to appear
+      const rows = page.locator('tbody tr');
+      await expect(rows.first()).toBeVisible({ timeout: 10000 });
+
+      const rowCount = await rows.count();
+      expect(rowCount).toBeGreaterThan(0);
+
+      // Every holding row must have an .atr-cell td
+      for (let i = 0; i < rowCount; i++) {
+        const atrCell = rows.nth(i).locator('td.atr-cell');
+        await expect(atrCell).toBeVisible();
+      }
+    });
+
+    test('ATR(14) cell shows dollar value or dash placeholder', async ({ page }) => {
+      await bootstrapSession(page, 'CLIENT');
+      await page.goto('/portfolio');
+
+      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 15000 });
+
+      const rows = page.locator('tbody tr');
+      await expect(rows.first()).toBeVisible({ timeout: 10000 });
+
+      const firstAtrCell = rows.first().locator('td.atr-cell');
+      const cellText = (await firstAtrCell.textContent() || '').trim();
+
+      console.log(`First ATR cell text: "${cellText}"`);
+
+      // Either a dollar amount like "$1.23 (0.5%)" or the placeholder "–"
+      const hasValue = /^\$[\d,]+\.\d{2}/.test(cellText);
+      const hasDash  = cellText === '–';
+      expect(hasValue || hasDash).toBe(true);
+    });
+
+    test('ATR(14) value cell carries a colour class when value is present', async ({ page }) => {
+      await bootstrapSession(page, 'CLIENT');
+      await page.goto('/portfolio');
+
+      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 15000 });
+
+      const rows = page.locator('tbody tr');
+      await expect(rows.first()).toBeVisible({ timeout: 10000 });
+
+      // Find first row that has a rendered .atr-value (not a dash)
+      const rowCount = await rows.count();
+      for (let i = 0; i < rowCount; i++) {
+        const atrValue = rows.nth(i).locator('.atr-value');
+        if (await atrValue.isVisible()) {
+          // Must carry exactly one of the three colour classes
+          const cls = await atrValue.getAttribute('class') || '';
+          const hasColorClass = cls.includes('atr-high') || cls.includes('atr-mid') || cls.includes('atr-low');
+          console.log(`ATR cell class="${cls}"`);
+          expect(hasColorClass).toBe(true);
+
+          // The percentage sub-label must also be visible
+          await expect(rows.nth(i).locator('.atr-pct')).toBeVisible();
+          break;
+        }
+      }
+    });
+
+    test('ATR(14) CSV download includes ATR columns', async ({ page }) => {
+      await bootstrapSession(page, 'CLIENT');
+      await page.goto('/portfolio');
+
+      await expect(page.getByText('Cash Balance')).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 10000 });
+
+      // Intercept the download
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        page.getByRole('button', { name: /Download CSV/i }).click()
+      ]);
+
+      const csvText = await (await download.createReadStream()).read?.toString?.() ??
+        Buffer.from(await new Response((await download.createReadStream()) as any).arrayBuffer()).toString();
+
+      console.log(`CSV first line: ${csvText.split('\n')[0]}`);
+      expect(csvText).toContain('ATR(14)');
+      expect(csvText).toContain('ATR%');
     });
   });
 });

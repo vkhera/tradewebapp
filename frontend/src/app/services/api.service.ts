@@ -181,6 +181,28 @@ export class ApiService {
   }
 
   // Import APIs
+  uploadImportFile(file: File): Observable<{fileName: string}> {
+    const formData = new FormData();
+    formData.append('file', file);
+    // Build auth header without Content-Type so the browser sets the multipart boundary automatically
+    const authHeaders: any = {};
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const currentUser = localStorage.getItem('currentUser');
+      if (currentUser) {
+        try {
+          const user = JSON.parse(currentUser);
+          if (user.username && user.password) {
+            authHeaders['Authorization'] = `Basic ${btoa(`${user.username}:${user.password}`)}`;
+          }
+        } catch (e) { /* ignore */ }
+      }
+    }
+    return this.http.post<{fileName: string}>(`${this.baseUrl}/import/upload`, formData, {
+      headers: new HttpHeaders(authHeaders),
+      withCredentials: true
+    });
+  }
+
   importHoldings(clientId: number, fileName: string): Observable<any> {
     return this.http.post<any>(`${this.baseUrl}/import/holdings`, 
       { clientId, fileName }, 
@@ -222,5 +244,10 @@ export class ApiService {
 
   refreshPricePredictions(symbol: string): Observable<any> {
     return this.http.post<any>(`${this.baseUrl}/predictions/${symbol}/refresh`, {}, this.getHttpOptions());
+  }
+
+  // Suggested Trades API
+  getSuggestedTrades(clientId: number): Observable<any[]> {
+    return this.http.get<any[]>(`${this.baseUrl}/suggestions/${clientId}`, this.getHttpOptions());
   }
 }

@@ -21,6 +21,7 @@ public class StockPricePredictionBatchService {
 
     private final PortfolioRepository          portfolioRepository;
     private final StockPricePredictionService  predictionService;
+    private final MarketIndexService           marketIndexService;
 
     /**
      * Runs every hour on the hour. Initial delay of 30 seconds after startup.
@@ -41,6 +42,16 @@ public class StockPricePredictionBatchService {
         }
 
         log.info("Running predictions for {} symbols: {}", symbols.size(), symbols);
+
+        // Step 0: Refresh index correlations for all symbols (sequential – lightweight)
+        log.info("Refreshing market-index correlations for {} symbols", symbols.size());
+        for (String symbol : symbols) {
+            try {
+                marketIndexService.refreshCorrelations(symbol);
+            } catch (Exception e) {
+                log.warn("Index correlation refresh failed for {}: {}", symbol, e.getMessage());
+            }
+        }
 
         // Step 1: Resolve past predictions and update weights (sequential to avoid DB conflicts)
         for (String symbol : symbols) {

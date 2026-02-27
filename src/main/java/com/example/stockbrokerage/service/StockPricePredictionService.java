@@ -1,18 +1,25 @@
 package com.example.stockbrokerage.service;
 
 import com.example.stockbrokerage.dto.HourlyPricePrediction;
+import com.example.stockbrokerage.dto.MarketIndexInfluence;
 import com.example.stockbrokerage.dto.StockPricePredictionResponse;
 import com.example.stockbrokerage.entity.StockPricePrediction;
+import com.example.stockbrokerage.entity.StockPredictionWeightHistory;
 import com.example.stockbrokerage.repository.StockPricePredictionRepository;
+import com.example.stockbrokerage.repository.StockPredictionWeightHistoryRepository;
+import com.example.stockbrokerage.repository.StockPredictionWeightRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.*;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.file.*;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -66,8 +73,11 @@ public class StockPricePredictionService {
     private static final double MIN_WEIGHT       = 0.05;
     private static final double MAX_WEIGHT       = 0.60;
 
-    private final StockMarketDataService    marketDataService;
-    private final StockPricePredictionRepository repository;
+    private final StockMarketDataService                    marketDataService;
+    private final StockPricePredictionRepository             repository;
+    private final StockPredictionWeightRepository            weightRepository;
+    private final StockPredictionWeightHistoryRepository     weightHistoryRepository;
+    private final MarketIndexService                         marketIndexService;
 
     // ================================================================= public API
 
@@ -79,13 +89,25 @@ public class StockPricePredictionService {
         ensureDataDir();
 
         // Return cached response if fresh enough
-        StockPricePredictionResponse cached = loadLatestFromDb(symbol);
-        if (cached != null) {
-            cached.setCached(true);
-            return cached;
+        StockPricePredictionResponse response = loadLatestFromDb(symbol);
+        if (response == null) {
+            // Stale or absent — recalculate future predictions then reload full day
+            calculateAndStore(symbol);
+            response = loadLatestFromDb(symbol);
+            if (response == null) response = buildEmptyResponse(symbol);
+        } else {
+            response.setCached(true);
         }
 
-        return calculateAndStore(symbol);
+        // Always append previous business day (resolved) predictions
+        response.setPreviousDayPredictions(loadPreviousDayFromDb(symbol));
+
+        // Always attach fresh index influences (not cached — must reflect live index prices)
+        if (response.getIndexInfluences() == null || response.getIndexInfluences().isEmpty()) {
+            response.setIndexInfluences(marketIndexService.getIndexInfluences(symbol));
+        }
+
+        return response;
     }
 
     /**
@@ -106,6 +128,15 @@ public class StockPricePredictionService {
 
         LocalDateTime baseHour = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0);
 
+        // ── Market-index adjustment (computed once per prediction run) ─────────
+        // The adjustment factor is a signed decimal (e.g. 0.005 = +0.5%).
+        // It blends today's intraday returns of IWM/QQQ/VOO/DIA/VXVY, weighted
+        // by each index's rolling correlation with this stock and its learned weight.
+        double indexFactor = marketIndexService.computeIndexAdjustmentFactor(symbol);
+        List<MarketIndexInfluence> indexInfluences = marketIndexService.getIndexInfluences(symbol);
+        log.debug("{}: index adjustment factor = {:.4f} from {} index signals",
+            symbol, indexFactor, indexInfluences.size());
+
         List<HourlyPricePrediction> hourlyPredictions = new ArrayList<>();
 
         for (int h = 1; h <= PREDICT_HOURS; h++) {
@@ -119,13 +150,19 @@ public class StockPricePredictionService {
             breakdown.put(TECH_MEAN_REVERSION,    meanReversion(history, h * BARS_PER_HOUR));
             breakdown.put(TECH_HOLT_WINTERS,      holtWinters(history, h * BARS_PER_HOUR));
 
-            // Weighted ensemble
-            BigDecimal weightedPrice = weightedMean(breakdown, weights);
+            // Weighted technique ensemble (raw, before index adjustment)
+            BigDecimal rawPrice = weightedMean(breakdown, weights);
             double confidence = calculateConfidence(breakdown, weights);
 
+            // Apply index adjustment: adjustedPrice = rawPrice * (1 + indexFactor)
+            BigDecimal adjustedPrice = rawPrice
+                .multiply(BigDecimal.ONE.add(BigDecimal.valueOf(indexFactor)))
+                .setScale(4, RoundingMode.HALF_UP);
+
             HourlyPricePrediction prediction = new HourlyPricePrediction(
-                targetHour, weightedPrice, confidence,
-                new LinkedHashMap<>(breakdown), new LinkedHashMap<>(weights)
+                targetHour, adjustedPrice, confidence,
+                new LinkedHashMap<>(breakdown), new LinkedHashMap<>(weights),
+                null, rawPrice, indexFactor
             );
             hourlyPredictions.add(prediction);
 
@@ -140,7 +177,7 @@ public class StockPricePredictionService {
             symbol, currentPrice, baseHour,
             hourlyPredictions, new LinkedHashMap<>(weights),
             averageConfidence(hourlyPredictions), false,
-            LocalDateTime.now()
+            LocalDateTime.now(), List.of(), indexInfluences
         );
 
         log.info("Completed predictions for {} – current price: {}, 1h prediction: {}",
@@ -200,6 +237,20 @@ public class StockPricePredictionService {
         weights.replaceAll((k, v) -> v / total);
 
         saveWeights(symbol, weights);
+
+        // ── Update market-index weights based on actual vs predicted price direction ──
+        // Compute actual return vs the average of the predictions that were just resolved.
+        BigDecimal totalPredicted = unresolved.stream()
+            .map(StockPricePrediction::getPredictedPrice)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal avgPredicted = totalPredicted.divide(
+            BigDecimal.valueOf(unresolved.size()), 6, RoundingMode.HALF_UP);
+        if (avgPredicted.compareTo(BigDecimal.ZERO) > 0) {
+            double actualReturn = currentPrice.subtract(avgPredicted)
+                .divide(avgPredicted, 6, RoundingMode.HALF_UP).doubleValue();
+            marketIndexService.updateIndexWeights(symbol, actualReturn);
+        }
+
         log.info("Updated per-stock weights for {} based on {} resolved predictions", symbol, unresolved.size());
     }
 
@@ -347,12 +398,26 @@ public class StockPricePredictionService {
         return weights;
     }
 
+    @Transactional
     void saveWeights(String symbol, Map<String, Double> weights) {
         Path path = Paths.get(weightsFilePath(symbol));
+        LocalDateTime now = LocalDateTime.now();
         try (PrintWriter w = new PrintWriter(new FileWriter(path.toFile()))) {
             w.println("Technique,Weight,LastUpdated");
-            weights.forEach((t, wt) ->
-                w.printf("%s,%.6f,%s%n", t, wt, LocalDateTime.now().format(FMT)));
+            weights.forEach((t, wt) -> {
+                w.printf("%s,%.6f,%s%n", t, wt, now.format(FMT));
+                // Record history then mirror to PostgreSQL
+                try {
+                    weightRepository.findBySymbolAndTechnique(symbol, t).ifPresent(existing -> {
+                        StockPredictionWeightHistory hist = new StockPredictionWeightHistory(
+                            null, symbol, t, existing.getWeight(), wt, now);
+                        weightHistoryRepository.save(hist);
+                    });
+                    weightRepository.upsertWeight(symbol, t, wt, now);
+                } catch (Exception e) {
+                    log.warn("DB upsert failed for weight {}/{}: {}", symbol, t, e.getMessage());
+                }
+            });
         } catch (IOException e) {
             log.error("Error saving prediction weights for {}: {}", symbol, e.getMessage());
         }
@@ -415,17 +480,22 @@ public class StockPricePredictionService {
     // ============================================================= DB cached load
 
     private StockPricePredictionResponse loadLatestFromDb(String symbol) {
-        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(50);
-        LocalDateTime now    = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime cutoff     = LocalDateTime.now().minusMinutes(50);
+        LocalDateTime nowHour    = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime todayOpen  = LocalDate.now().atTime(9, 0);
+        LocalDateTime todayClose = LocalDate.now().atTime(16, 0);
 
+        // Fetch all of today's market-hours predictions (past + future for today)
         List<StockPricePrediction> recs =
-            repository.findBySymbolAndTargetHourAfterOrderByTargetHourAsc(symbol, now);
+            repository.findBySymbolAndTargetHourBetweenOrderByTargetHourAsc(symbol, todayOpen, todayClose);
 
         if (recs.isEmpty()) return null;
 
-        // check freshness
-        boolean fresh = recs.stream().allMatch(r -> r.getPredictionMadeAt().isAfter(cutoff));
-        if (!fresh) return null;
+        // Only future predictions must pass the freshness check
+        boolean futureFresh = recs.stream()
+            .filter(r -> r.getTargetHour().isAfter(nowHour))
+            .allMatch(r -> r.getPredictionMadeAt().isAfter(cutoff));
+        if (!futureFresh) return null;
 
         // Group by targetHour
         Map<LocalDateTime, List<StockPricePrediction>> byHour = recs.stream()
@@ -438,7 +508,6 @@ public class StockPricePredictionService {
 
         List<HourlyPricePrediction> predictions = byHour.entrySet().stream()
             .sorted(Map.Entry.comparingByKey())
-            .limit(PREDICT_HOURS)
             .map(entry -> {
                 Map<String, BigDecimal> breakdown = entry.getValue().stream()
                     .collect(Collectors.toMap(
@@ -448,21 +517,86 @@ public class StockPricePredictionService {
 
                 BigDecimal weighted = weightedMean(breakdown, weights);
                 double conf = calculateConfidence(breakdown, weights);
+
+                // Include actual price if already resolved (past hours)
+                BigDecimal actual = entry.getValue().stream()
+                    .filter(r -> r.getActualPrice() != null)
+                    .findFirst()
+                    .map(StockPricePrediction::getActualPrice)
+                    .orElse(null);
+
                 return new HourlyPricePrediction(entry.getKey(), weighted, conf,
-                    breakdown, new LinkedHashMap<>(weights));
+                    breakdown, new LinkedHashMap<>(weights), actual, null, 0.0);
             })
             .collect(Collectors.toList());
 
-        LocalDateTime madeAt = recs.getFirst().getPredictionMadeAt();
+        // Use the predictionMadeAt from the most recent future prediction (or first record)
+        LocalDateTime madeAt = recs.stream()
+            .filter(r -> r.getTargetHour().isAfter(nowHour))
+            .findFirst()
+            .map(StockPricePrediction::getPredictionMadeAt)
+            .orElseGet(() -> recs.getFirst().getPredictionMadeAt());
+
         return new StockPricePredictionResponse(
             symbol, currentPrice, madeAt, predictions, new LinkedHashMap<>(weights),
-            averageConfidence(predictions), true, madeAt);
+            averageConfidence(predictions), true, madeAt, null, null);
+    }
+
+    /**
+     * Returns the previous business day's hourly predictions with actual prices filled in.
+     */
+    private List<HourlyPricePrediction> loadPreviousDayFromDb(String symbol) {
+        LocalDate prevDay      = getPreviousBusinessDay(LocalDate.now());
+        LocalDateTime prevOpen  = prevDay.atTime(9, 0);
+        LocalDateTime prevClose = prevDay.atTime(16, 0);
+
+        List<StockPricePrediction> recs =
+            repository.findBySymbolAndTargetHourBetweenOrderByTargetHourAsc(symbol, prevOpen, prevClose);
+
+        if (recs.isEmpty()) return List.of();
+
+        Map<String, Double> weights = loadWeights(symbol);
+        Map<LocalDateTime, List<StockPricePrediction>> byHour = recs.stream()
+            .collect(Collectors.groupingBy(StockPricePrediction::getTargetHour));
+
+        return byHour.entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .map(entry -> {
+                Map<String, BigDecimal> breakdown = entry.getValue().stream()
+                    .collect(Collectors.toMap(
+                        StockPricePrediction::getTechnique,
+                        StockPricePrediction::getPredictedPrice,
+                        (a, b) -> a, LinkedHashMap::new));
+
+                BigDecimal weighted = weightedMean(breakdown, weights);
+                double conf = calculateConfidence(breakdown, weights);
+
+                BigDecimal actual = entry.getValue().stream()
+                    .filter(r -> r.getActualPrice() != null)
+                    .findFirst()
+                    .map(StockPricePrediction::getActualPrice)
+                    .orElse(null);
+
+                return new HourlyPricePrediction(entry.getKey(), weighted, conf,
+                    breakdown, new LinkedHashMap<>(weights), actual, null, 0.0);
+            })
+            .collect(Collectors.toList());
+    }
+
+    /** Returns the most recent business day before {@code date}, skipping weekends. */
+    private LocalDate getPreviousBusinessDay(LocalDate date) {
+        LocalDate prev = date.minusDays(1);
+        while (prev.getDayOfWeek() == DayOfWeek.SATURDAY
+            || prev.getDayOfWeek() == DayOfWeek.SUNDAY) {
+            prev = prev.minusDays(1);
+        }
+        return prev;
     }
 
     private StockPricePredictionResponse buildEmptyResponse(String symbol) {
         BigDecimal cur = marketDataService.getCurrentPrice(symbol);
         return new StockPricePredictionResponse(
-            symbol, cur, LocalDateTime.now(), List.of(), Map.of(), 0.0, false, LocalDateTime.now());
+            symbol, cur, LocalDateTime.now(), List.of(), Map.of(), 0.0, false, LocalDateTime.now(), List.of(), List.of());
     }
 
     private void ensureDataDir() {

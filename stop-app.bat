@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 
 REM ====================================================================
 REM  Stock Brokerage - Full Application Shutdown
-REM  Stop order: Angular -> Spring Boot -> Redis -> PostgreSQL
+REM  Stop order: Frontend -> Backend -> Redis -> PostgreSQL (all Docker)
 REM
 REM  Usage:
 REM    stop-app.bat          - stop the application only
@@ -22,29 +22,26 @@ echo   Stock Brokerage Application - Stopping All Services
 echo ====================================================================
 echo.
 
-REM ── Step 1: Stop Angular Frontend (port 4200) ─────────────────────
-echo [1/4] Stopping Angular frontend (port 4200)...
-set FE_FOUND=0
-for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr ":4200.*LISTENING"') do (
-    taskkill /PID %%p /T /F >nul 2>&1
-    echo   Stopped process PID %%p (Angular / node)
-    set FE_FOUND=1
+REM ── Step 1: Stop Frontend Docker container ────────────────────────
+echo [1/4] Stopping Angular frontend container...
+docker inspect stockbrokerage-frontend >nul 2>&1
+if %errorlevel% equ 0 (
+    docker stop stockbrokerage-frontend >nul 2>&1
+    echo   Frontend container stopped.
+) else (
+    echo   Frontend container 'stockbrokerage-frontend' not found - skipping.
 )
-if "!FE_FOUND!"=="0" echo   Angular frontend was not running on port 4200.
 
-REM Give node a moment to release the port
-timeout /t 2 /nobreak >nul
-
-REM ── Step 2: Stop Spring Boot Backend (port 8080) ──────────────────
+REM ── Step 2: Stop Backend Docker container ─────────────────────────
 echo.
-echo [2/4] Stopping Spring Boot backend (port 8080)...
-set BE_FOUND=0
-for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr ":8080.*LISTENING"') do (
-    taskkill /PID %%p /T /F >nul 2>&1
-    echo   Stopped process PID %%p (Java / Spring Boot)
-    set BE_FOUND=1
+echo [2/4] Stopping Spring Boot backend container...
+docker inspect stockbrokerage-backend >nul 2>&1
+if %errorlevel% equ 0 (
+    docker stop stockbrokerage-backend >nul 2>&1
+    echo   Backend container stopped.
+) else (
+    echo   Backend container 'stockbrokerage-backend' not found - skipping.
 )
-if "!BE_FOUND!"=="0" echo   Spring Boot backend was not running on port 8080.
 
 REM ── Step 3: Stop Redis ────────────────────────────────────────────
 echo.

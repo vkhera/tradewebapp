@@ -65,3 +65,11 @@ logs/
 
 # Runtime-generated stock price prediction data
 stock_predictions/
+# Local backup directory
+backup/
+
+# SSL certificates (self-signed; mount real certs from host)
+ssl/
+
+# Ad-hoc test output files
+test-results.txt

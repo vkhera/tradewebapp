@@ -12,7 +12,6 @@ datasources:
     type:      prometheus
     uid:       prometheus
     url:       http://localhost:9090
-    isDefault: true
     access:    proxy
     editable:  true
     jsonData:

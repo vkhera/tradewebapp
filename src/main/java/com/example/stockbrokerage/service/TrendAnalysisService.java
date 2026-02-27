@@ -2,9 +2,14 @@ package com.example.stockbrokerage.service;
 
 import com.example.stockbrokerage.dto.TrendPrediction;
 import com.example.stockbrokerage.dto.TrendPrediction.TrendDirection;
+import com.example.stockbrokerage.entity.TrendPredictionWeightHistory;
+import com.example.stockbrokerage.repository.TrendPredictionResultRepository;
+import com.example.stockbrokerage.repository.TrendPredictionWeightHistoryRepository;
+import com.example.stockbrokerage.repository.TrendPredictionWeightRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.*;
 import java.math.BigDecimal;
@@ -13,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -26,14 +32,21 @@ public class TrendAnalysisService {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     
     private final StockPriceService stockPriceService;
+    private final TrendPredictionResultRepository trendResultRepository;
+    private final TrendPredictionWeightRepository trendWeightRepository;
+    private final TrendPredictionWeightHistoryRepository trendWeightHistoryRepository;
+    private final MarketIndexService marketIndexService;
     
     // Technique names
-    private static final String MA_CROSSOVER = "MA_Crossover";
-    private static final String RSI = "RSI";
-    private static final String MACD = "MACD";
-    private static final String PRICE_MOMENTUM = "Price_Momentum";
-    private static final String VOLUME_TREND = "Volume_Trend";
+    private static final String MA_CROSSOVER    = "MA_Crossover";
+    private static final String RSI             = "RSI";
+    private static final String MACD            = "MACD";
+    private static final String PRICE_MOMENTUM  = "Price_Momentum";
+    private static final String VOLUME_TREND    = "Volume_Trend";
+    /** Composite trend signal derived from weighted market-index movements. */
+    private static final String INDEX_MOMENTUM  = "Index_Momentum";
     
+    @Transactional
     public TrendPrediction analyzeTrend(String symbol) {
         log.info("Analyzing trend for symbol: {}", symbol);
         
@@ -51,11 +64,12 @@ public class TrendAnalysisService {
             List<BigDecimal> prices = getHistoricalPrices(symbol, 200);
             List<Long> volumes = getHistoricalVolumes(symbol, 200);
             
-            techniqueResults.put(MA_CROSSOVER, calculateMACrossover(prices));
-            techniqueResults.put(RSI, calculateRSI(prices));
-            techniqueResults.put(MACD, calculateMACD(prices));
-            techniqueResults.put(PRICE_MOMENTUM, calculatePriceMomentum(prices));
-            techniqueResults.put(VOLUME_TREND, calculateVolumeTrend(volumes));
+            techniqueResults.put(MA_CROSSOVER,   calculateMACrossover(prices));
+            techniqueResults.put(RSI,             calculateRSI(prices));
+            techniqueResults.put(MACD,            calculateMACD(prices));
+            techniqueResults.put(PRICE_MOMENTUM,  calculatePriceMomentum(prices));
+            techniqueResults.put(VOLUME_TREND,    calculateVolumeTrend(volumes));
+            techniqueResults.put(INDEX_MOMENTUM,  calculateIndexMomentum(symbol));
             
         } catch (Exception e) {
             log.error("Error calculating trends for {}", symbol, e);
@@ -155,6 +169,30 @@ public class TrendAnalysisService {
         return TrendDirection.SIDEWAYS;
     }
     
+    /**
+     * Derives a trend direction from the composite market-index adjustment factor.
+     * A positive dampened factor means the weighted basket of indices is signalling
+     * upward pressure on this stock; negative means downward.
+     *
+     * <p>Thresholds (post-dampening):
+     * <ul>
+     *   <li>&gt; 0.002 (+0.2%) → UPTREND</li>
+     *   <li>&lt; −0.002 (−0.2%) → DOWNTREND</li>
+     *   <li>otherwise → SIDEWAYS</li>
+     * </ul>
+     */
+    private TrendDirection calculateIndexMomentum(String symbol) {
+        try {
+            double factor = marketIndexService.computeIndexAdjustmentFactor(symbol);
+            log.debug("Index momentum factor for {}: {:.4f}", symbol, factor);
+            if (factor >  0.002) return TrendDirection.UPTREND;
+            if (factor < -0.002) return TrendDirection.DOWNTREND;
+        } catch (Exception e) {
+            log.debug("Index momentum unavailable for {}: {}", symbol, e.getMessage());
+        }
+        return TrendDirection.SIDEWAYS;
+    }
+
     private TrendDirection calculateVolumeTrend(List<Long> volumes) {
         if (volumes.size() < 20) {
             return TrendDirection.SIDEWAYS;
@@ -331,14 +369,15 @@ public class TrendAnalysisService {
         Path weightsPath = Paths.get(weightsFile);
         
         if (!Files.exists(weightsPath)) {
-            // Initialize with equal weights for this stock
-            weights.put(MA_CROSSOVER, 0.2);
-            weights.put(RSI, 0.2);
-            weights.put(MACD, 0.2);
-            weights.put(PRICE_MOMENTUM, 0.2);
-            weights.put(VOLUME_TREND, 0.2);
+            // Initialize with balanced weights across all six techniques
+            weights.put(MA_CROSSOVER,   0.20);
+            weights.put(RSI,            0.20);
+            weights.put(MACD,           0.15);
+            weights.put(PRICE_MOMENTUM, 0.20);
+            weights.put(VOLUME_TREND,   0.10);
+            weights.put(INDEX_MOMENTUM, 0.15);
             saveWeights(symbol, weights);
-            log.info("Initialized default weights for {}", symbol);
+            log.info("Initialized default weights (incl. Index_Momentum) for {}", symbol);
             return weights;
         }
         
@@ -367,24 +406,38 @@ public class TrendAnalysisService {
     private void saveWeights(String symbol, Map<String, Double> weights) {
         String weightsFile = "%s/%s_weights.csv".formatted(PREDICTIONS_DIR, symbol);
         Path weightsPath = Paths.get(weightsFile);
-        
+        LocalDate today = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now();
+
         try (PrintWriter writer = new PrintWriter(new FileWriter(weightsPath.toFile()))) {
             writer.println("Technique,Weight,LastUpdated");
-            
+
             for (Map.Entry<String, Double> entry : weights.entrySet()) {
                 writer.println("%s,%.4f,%s".formatted(
                     entry.getKey(),
                     entry.getValue(),
-                    LocalDate.now().format(DATE_FORMATTER)
+                    today.format(DATE_FORMATTER)
                 ));
+                // Record history then mirror to PostgreSQL
+                try {
+                    trendWeightRepository.findBySymbolAndTechnique(symbol, entry.getKey()).ifPresent(existing -> {
+                        TrendPredictionWeightHistory hist = new TrendPredictionWeightHistory(
+                            null, symbol, entry.getKey(), existing.getWeight(), entry.getValue(), now);
+                        trendWeightHistoryRepository.save(hist);
+                    });
+                    trendWeightRepository.upsertWeight(symbol, entry.getKey(), entry.getValue(), today);
+                } catch (Exception e) {
+                    log.warn("DB upsert failed for trend weight {}/{}: {}", symbol, entry.getKey(), e.getMessage());
+                }
             }
-            
+
             log.debug("Saved weights for {} to {}", symbol, weightsPath);
         } catch (IOException e) {
             log.error("Error saving weights for {}", symbol, e);
         }
     }
-    
+
+    @Transactional
     private void savePrediction(TrendPrediction prediction) {
         String fileName = "%s/%s_predictions.csv".formatted(
             PREDICTIONS_DIR,
@@ -414,6 +467,25 @@ public class TrendAnalysisService {
             log.debug("Saved prediction for {} to {}", prediction.getSymbol(), fileName);
         } catch (IOException e) {
             log.error("Error saving prediction for {}", prediction.getSymbol(), e);
+        }
+
+        // Mirror to PostgreSQL
+        try {
+            Map<String, TrendDirection> results = prediction.getTechniqueResults();
+            trendResultRepository.upsertResult(
+                prediction.getSymbol(),
+                prediction.getPredictionDate(),
+                prediction.getOverallTrend().name(),
+                prediction.getConfidence(),
+                String.valueOf(results.get(MA_CROSSOVER)),
+                String.valueOf(results.get(RSI)),
+                String.valueOf(results.get(MACD)),
+                String.valueOf(results.get(PRICE_MOMENTUM)),
+                String.valueOf(results.get(VOLUME_TREND)),
+                LocalDateTime.now()
+            );
+        } catch (Exception e) {
+            log.warn("DB upsert failed for trend prediction {}: {}", prediction.getSymbol(), e.getMessage());
         }
     }
     

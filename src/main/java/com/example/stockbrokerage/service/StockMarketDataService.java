@@ -1,6 +1,7 @@
 package com.example.stockbrokerage.service;
 
 import com.example.stockbrokerage.client.YahooFinanceClient;
+import com.example.stockbrokerage.repository.StockPriceCacheRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ public class StockMarketDataService {
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final YahooFinanceClient yahooFinanceClient;
+    private final StockPriceCacheRepository priceCacheRepository;
 
     /**
      * Returns the last N 5-minute bars of closing prices for the symbol.
@@ -119,9 +121,16 @@ public class StockMarketDataService {
             LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
             int floorMin = now.getMinute() - (now.getMinute() % 5);
             now = now.withMinute(floorMin);
+            LocalDateTime syncedAt = LocalDateTime.now();
             for (int i = 0; i < prices.size(); i++) {
                 LocalDateTime ts = now.minusMinutes(5L * (prices.size() - 1 - i));
                 writer.printf("%s,%s%n", ts.format(TS_FMT), prices.get(i).toPlainString());
+                // Mirror to PostgreSQL
+                try {
+                    priceCacheRepository.upsertBar(symbol, ts, prices.get(i), syncedAt);
+                } catch (Exception e) {
+                    log.warn("DB price cache upsert failed for {}: {}", symbol, e.getMessage());
+                }
             }
             log.debug("Saved {} 5-min bars to CSV cache for {}", prices.size(), symbol);
         } catch (IOException e) {

@@ -24,6 +24,7 @@ public class PortfolioService {
     private final PortfolioRepository portfolioRepository;
     private final StockPriceService stockPriceService;
     private final AccountRepository accountRepository;
+    private final AtrService atrService;
     
     public List<PortfolioResponse> getClientPortfolio(Long clientId) {
         List<Portfolio> portfolios = portfolioRepository.findByClientId(clientId);
@@ -79,7 +80,13 @@ public class PortfolioService {
         
         // Weight updates are now handled by the batch scheduler for better performance
         // No blocking operations during portfolio page load
-        
+
+        // ATR-14 + percentiles: approximated from 5-min close history (daily high/low = intraday max/min)
+        AtrService.AtrResult atrResult = atrService.computeAtrResult(portfolio.getSymbol());
+        BigDecimal atr14 = atrResult != null ? atrResult.atr14() : null;
+        BigDecimal atr75 = atrResult != null ? atrResult.atr75() : null;
+        BigDecimal atr90 = atrResult != null ? atrResult.atr90() : null;
+
         return new PortfolioResponse(
             portfolio.getId(),
             portfolio.getSymbol(),
@@ -88,7 +95,10 @@ public class PortfolioService {
             currentPrice,
             totalValue,
             profitLoss,
-            profitLossPercent
+            profitLossPercent,
+            atr14,
+            atr75,
+            atr90
         );
     }
     

@@ -16,8 +16,8 @@
 defaults:
   rate-limiter:
     enabled: true
-    limit-for-period: 1          # max calls allowed within the refresh window
-    limit-refresh-period-ms: 1000 # window size in ms  →  1 call / 1000 ms = 1 TPS globally
+    limit-for-period: 2          # max calls allowed within the refresh window
+    limit-refresh-period-ms: 1000 # window size in ms  →  2 calls / 1000 ms = 2 TPS globally
     timeout-duration-ms: 0        # 0 = fail immediately if no permit available (no queuing)
 
   circuit-breaker:
@@ -42,45 +42,45 @@ services:
 
   TradeService:
     rate-limiter:
-      limit-for-period: 5          # 5 TPS — trades need a bit more headroom
+      limit-for-period: 10         # 10 TPS — trades need a bit more headroom
 
   AccountService:
     rate-limiter:
-      limit-for-period: 5
+      limit-for-period: 10
 
   PortfolioService:
     rate-limiter:
-      limit-for-period: 10         # portfolio reads are cheap; allow higher throughput
+      limit-for-period: 20         # portfolio reads are cheap; allow higher throughput
 
   StockPriceService:
     rate-limiter:
-      limit-for-period: 10
+      limit-for-period: 20
 
   StockMarketDataService:
     rate-limiter:
-      limit-for-period: 5
+      limit-for-period: 10
 
   StockPricePredictionService:
     rate-limiter:
-      limit-for-period: 2          # heavy computation — keep tight
+      limit-for-period: 4          # heavy computation — keep tight
     circuit-breaker:
       failure-rate-threshold: 30.0 # trip faster for the expensive prediction path
 
   TrendAnalysisService:
     rate-limiter:
-      limit-for-period: 3
+      limit-for-period: 6
 
   FraudDetectionService:
     rate-limiter:
-      limit-for-period: 10         # runs inline with trades; must keep up
+      limit-for-period: 20         # runs inline with trades; must keep up
 
   RuleEngineService:
     rate-limiter:
-      limit-for-period: 10
+      limit-for-period: 20
 
   AuthService:
     rate-limiter:
-      limit-for-period: 3          # mild brute-force protection
+      limit-for-period: 6          # mild brute-force protection
 
   # Schedulers run on their own timer — no request-level throttle needed
   LimitOrderScheduler:
@@ -110,4 +110,4 @@ services:
 
   ReconciliationService:
     rate-limiter:
-      limit-for-period: 1
+      limit-for-period: 2

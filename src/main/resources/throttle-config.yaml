@@ -41,12 +41,12 @@ services:
       limit-for-period: 5
   StockPricePredictionService:
     rate-limiter:
-      limit-for-period: 2
+      limit-for-period: 5
     circuit-breaker:
       failure-rate-threshold: 30.0
   TrendAnalysisService:
     rate-limiter:
-      limit-for-period: 3
+      limit-for-period: 5
   FraudDetectionService:
     rate-limiter:
       limit-for-period: 10
@@ -55,7 +55,7 @@ services:
       limit-for-period: 10
   AuthService:
     rate-limiter:
-      limit-for-period: 3
+      limit-for-period: 10
   LimitOrderScheduler:
     rate-limiter:
       enabled: false

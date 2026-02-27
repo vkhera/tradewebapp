@@ -33,14 +33,18 @@ public class OpenApiConfig {
                     - Portfolio tracking and P/L reporting\n
                     - Multi-technique trend analysis (MA Crossover, RSI, MACD, Momentum, Volume) with adaptive per-stock weights\n
                     - 8-hour stock price prediction using 5-min Yahoo Finance bars (Linear Regression, EMA, Momentum, Mean Reversion, Holt-Winters)\n
-                    - CSV import/export for holdings and activity\n
+                    - CSV import/export for holdings and activity (restricted to own account; admin-unrestricted)\n\
+                    - **Suggested Trades**: top-5 sell/buy-back recommendations driven by ATR(14) and 8-hour predicted prices (>2% expected move threshold)\n\
+                    - Weight history trail: full audit log of every prediction & trend weight change (symbol, technique, old/new value, timestamp)\n\
+                    - Price cache mirrored to PostgreSQL in addition to CSV for durability\n\
+                    - HTTPS on port 443 (self-signed cert by default; mount real certs at `/etc/nginx/ssl/`)\n\
                     - Rate limiting & circuit breaking: Resilience4j throttle with hot-reloadable YAML config (`config/throttle-config.yaml`); per-service TPS overrides, 60-second auto-reload\n
                     \n
                     **Authentication:** Use `POST /api/auth/login` to obtain a session token, then click **Authorize** and enter it.\n
                     \n
                     **Rate Limits (default 1 TPS):** TradeService 5 TPS · AccountService 5 TPS · PortfolioService 10 TPS · StockPriceService 10 TPS · PredictionService 2 TPS · TrendAnalysis 3 TPS · AuthService 3 TPS
                     """)
-                .version("2.1.0")
+                .version("2.2.0")
                 .contact(new Contact()
                     .name("Stock Brokerage Team")
                     .email("support@stockbrokerage.com"))
@@ -50,7 +54,9 @@ public class OpenApiConfig {
             .externalDocs(new ExternalDocumentation()
                 .description("GitHub Repository")
                 .url("https://github.com/vkhera/tradewebapp"))
-            .addServersItem(new Server().url("http://localhost:8080").description("Local development"))
+            .addServersItem(new Server().url("http://localhost:8080").description("Local development (direct)"))
+            .addServersItem(new Server().url("http://localhost").description("Docker HTTP (nginx → 8080)"))
+            .addServersItem(new Server().url("https://localhost").description("Docker HTTPS (nginx SSL → 8080)"))
             // Ordered tag list controls section order in Swagger UI
             .tags(List.of(
                 new Tag().name("Authentication").description("Login and session management"),
@@ -58,9 +64,10 @@ public class OpenApiConfig {
                 new Tag().name("Portfolio").description("Portfolio holdings, P/L and summary"),
                 new Tag().name("Stocks").description("Real-time stock price and quote lookup"),
                 new Tag().name("Trades").description("Order submission, status and history"),
+                new Tag().name("Suggested Trades").description("AI-powered trade suggestions based on ATR(14) and 8-hour price predictions"),
                 new Tag().name("Trend Analysis").description("Multi-technique stock trend analysis with adaptive per-stock weights"),
                 new Tag().name("Price Predictions").description("8-hour hourly price predictions using 5-min Yahoo Finance bars"),
-                new Tag().name("Import").description("Bulk CSV import of holdings and activity"),
+                new Tag().name("Import").description("Bulk CSV import of holdings and activity (restricted to own account; admins unrestricted)"),
                 new Tag().name("Clients").description("Client registration and profile management"),
                 new Tag().name("Admin – Clients").description("Admin: client management and audit logs"),
                 new Tag().name("Admin – Trades").description("Admin: full trade history and audit logs"),

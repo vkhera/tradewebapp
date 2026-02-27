@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../services/api.service';
@@ -26,27 +26,50 @@ interface ImportResponse {
         <p>Import current portfolio holdings from CSV file</p>
         
         <div class="form-group">
-          <label>Client ID:</label>
+          <label>Client ID: <span *ngIf="!isAdmin" style="font-size:11px;color:#888">(locked to your account)</span></label>
           <input 
             type="number" 
             [(ngModel)]="holdingsClientId" 
             placeholder="Enter Client ID"
+            [readonly]="!isAdmin"
+            [style.background]="!isAdmin ? '#f0f0f0' : ''"
             class="form-control">
         </div>
         
         <div class="form-group">
-          <label>File Name:</label>
+          <label>File:</label>
+          <div class="drop-zone"
+               [class.drag-over]="holdingsDragOver"
+               (dragover)="onDragOver($event, 'holdings')"
+               (dragleave)="onDragLeave('holdings')"
+               (drop)="onDrop($event, 'holdings')"
+               (click)="holdingsFileInput.click()">
+            <input #holdingsFileInput type="file" accept=".csv" style="display:none"
+                   (change)="onFileSelected($event, 'holdings')">
+            <ng-container *ngIf="uploadingHoldings">
+              <span class="drop-zone-icon">⏳</span>
+              <span>Uploading...</span>
+            </ng-container>
+            <ng-container *ngIf="!uploadingHoldings && !holdingsFileName">
+              <span class="drop-zone-icon">📂</span>
+              <span>Drag &amp; drop CSV here, or click to browse</span>
+            </ng-container>
+            <ng-container *ngIf="!uploadingHoldings && holdingsFileName">
+              <span class="drop-zone-icon">✅</span>
+              <span class="drop-zone-filename">{{ holdingsFileName }}</span>
+              <span class="drop-zone-hint">(click to change)</span>
+            </ng-container>
+          </div>
           <input 
             type="text" 
             [(ngModel)]="holdingsFileName" 
-            value="ExportData17022026162214.csv"
-            placeholder="Enter CSV file name"
-            class="form-control">
+            placeholder="Or type CSV file name manually"
+            class="form-control mt-2">
         </div>
         
         <button 
           (click)="importHoldings()" 
-          [disabled]="importingHoldings"
+          [disabled]="importingHoldings || uploadingHoldings || !holdingsFileName"
           class="btn btn-primary">
           {{ importingHoldings ? 'Importing...' : 'Import Holdings' }}
         </button>
@@ -72,11 +95,13 @@ interface ImportResponse {
         <p>Remove all portfolio holdings and trade activity for a client before re-importing</p>
         
         <div class="form-group">
-          <label>Client ID:</label>
+          <label>Client ID: <span *ngIf="!isAdmin" style="font-size:11px;color:#888">(locked to your account)</span></label>
           <input 
             type="number" 
             [(ngModel)]="cleanupClientId" 
             placeholder="Enter Client ID"
+            [readonly]="!isAdmin"
+            [style.background]="!isAdmin ? '#f0f0f0' : ''"
             class="form-control">
         </div>
         
@@ -106,27 +131,50 @@ interface ImportResponse {
         <p>Import trade activity and reconcile with portfolio</p>
         
         <div class="form-group">
-          <label>Client ID:</label>
+          <label>Client ID: <span *ngIf="!isAdmin" style="font-size:11px;color:#888">(locked to your account)</span></label>
           <input 
             type="number" 
             [(ngModel)]="activityClientId" 
             placeholder="Enter Client ID"
+            [readonly]="!isAdmin"
+            [style.background]="!isAdmin ? '#f0f0f0' : ''"
             class="form-control">
         </div>
         
         <div class="form-group">
-          <label>File Name:</label>
+          <label>File:</label>
+          <div class="drop-zone"
+               [class.drag-over]="activityDragOver"
+               (dragover)="onDragOver($event, 'activity')"
+               (dragleave)="onDragLeave('activity')"
+               (drop)="onDrop($event, 'activity')"
+               (click)="activityFileInput.click()">
+            <input #activityFileInput type="file" accept=".csv" style="display:none"
+                   (change)="onFileSelected($event, 'activity')">
+            <ng-container *ngIf="uploadingActivity">
+              <span class="drop-zone-icon">⏳</span>
+              <span>Uploading...</span>
+            </ng-container>
+            <ng-container *ngIf="!uploadingActivity && !activityFileName">
+              <span class="drop-zone-icon">📂</span>
+              <span>Drag &amp; drop CSV here, or click to browse</span>
+            </ng-container>
+            <ng-container *ngIf="!uploadingActivity && activityFileName">
+              <span class="drop-zone-icon">✅</span>
+              <span class="drop-zone-filename">{{ activityFileName }}</span>
+              <span class="drop-zone-hint">(click to change)</span>
+            </ng-container>
+          </div>
           <input 
             type="text" 
             [(ngModel)]="activityFileName" 
-            value="ExportData17022026162518-IRA94178-Activity.csv"
-            placeholder="Enter CSV file name"
-            class="form-control">
+            placeholder="Or type CSV file name manually"
+            class="form-control mt-2">
         </div>
         
         <button 
           (click)="importActivity()" 
-          [disabled]="importingActivity"
+          [disabled]="importingActivity || uploadingActivity || !activityFileName"
           class="btn btn-primary">
           {{ importingActivity ? 'Importing...' : 'Import Activity' }}
         </button>
@@ -244,6 +292,59 @@ interface ImportResponse {
       background: #fff3cd;
       border: 1px solid #ffc107;
     }
+
+    .drop-zone {
+      border: 2px dashed #adb5bd;
+      border-radius: 6px;
+      padding: 24px 16px;
+      text-align: center;
+      cursor: pointer;
+      background: #fff;
+      color: #6c757d;
+      font-size: 14px;
+      transition: border-color 0.2s, background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 64px;
+      user-select: none;
+    }
+
+    .drop-zone:hover {
+      border-color: #007bff;
+      background: #f0f7ff;
+      color: #0056b3;
+    }
+
+    .drop-zone.drag-over {
+      border-color: #007bff;
+      background: #e6f0ff;
+      color: #0056b3;
+    }
+
+    .drop-zone-icon {
+      font-size: 20px;
+    }
+
+    .drop-zone-filename {
+      font-weight: bold;
+      color: #155724;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 300px;
+    }
+
+    .drop-zone-hint {
+      font-size: 11px;
+      color: #888;
+      margin-left: 4px;
+    }
+
+    .mt-2 {
+      margin-top: 8px;
+    }
     
     .result-box {
       margin-top: 20px;
@@ -291,25 +392,106 @@ interface ImportResponse {
     }
   `]
 })
-export class ImportDataComponent {
+export class ImportDataComponent implements OnInit {
+  @ViewChild('holdingsFileInput') holdingsFileInput!: ElementRef<HTMLInputElement>;
+  @ViewChild('activityFileInput') activityFileInput!: ElementRef<HTMLInputElement>;
+
+  isAdmin: boolean = false;
+
   cleanupClientId: number = 1;
   cleaningUp: boolean = false;
   cleanupResult: any = null;
-  
+
   holdingsClientId: number = 1;
-  holdingsFileName: string = 'ExportData17022026162214.csv';
+  holdingsFileName: string = '';
   importingHoldings: boolean = false;
+  uploadingHoldings: boolean = false;
+  holdingsDragOver: boolean = false;
   holdingsResult: ImportResponse | null = null;
-  
+
   activityClientId: number = 1;
-  activityFileName: string = 'ExportData17022026162518-IRA94178-Activity.csv';
+  activityFileName: string = '';
   importingActivity: boolean = false;
+  uploadingActivity: boolean = false;
+  activityDragOver: boolean = false;
   activityResult: ImportResponse | null = null;
-  
+
   constructor(
     private apiService: ApiService,
     private router: Router
   ) {}
+
+  ngOnInit(): void {
+    const storedRole = localStorage.getItem('role') || '';
+    this.isAdmin = storedRole.toUpperCase() === 'ADMIN';
+    if (!this.isAdmin) {
+      const storedClientId = parseInt(localStorage.getItem('clientId') || '0', 10);
+      if (storedClientId > 0) {
+        this.holdingsClientId = storedClientId;
+        this.activityClientId = storedClientId;
+        this.cleanupClientId  = storedClientId;
+      }
+    }
+  }
+
+  onDragOver(event: DragEvent, type: 'holdings' | 'activity'): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (type === 'holdings') this.holdingsDragOver = true;
+    else this.activityDragOver = true;
+  }
+
+  onDragLeave(type: 'holdings' | 'activity'): void {
+    if (type === 'holdings') this.holdingsDragOver = false;
+    else this.activityDragOver = false;
+  }
+
+  onDrop(event: DragEvent, type: 'holdings' | 'activity'): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (type === 'holdings') this.holdingsDragOver = false;
+    else this.activityDragOver = false;
+    const file = event.dataTransfer?.files[0];
+    if (file) this.uploadFile(file, type);
+  }
+
+  onFileSelected(event: Event, type: 'holdings' | 'activity'): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) this.uploadFile(file, type);
+    // Reset so the same file can be re-selected
+    input.value = '';
+  }
+
+  private uploadFile(file: File, type: 'holdings' | 'activity'): void {
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      alert('Only CSV files are accepted.');
+      return;
+    }
+    if (type === 'holdings') {
+      this.uploadingHoldings = true;
+      this.holdingsResult = null;
+    } else {
+      this.uploadingActivity = true;
+      this.activityResult = null;
+    }
+    this.apiService.uploadImportFile(file).subscribe({
+      next: (res) => {
+        if (type === 'holdings') {
+          this.holdingsFileName = res.fileName;
+          this.uploadingHoldings = false;
+        } else {
+          this.activityFileName = res.fileName;
+          this.uploadingActivity = false;
+        }
+      },
+      error: (err) => {
+        alert('Upload failed: ' + (err.error?.error || err.message));
+        if (type === 'holdings') this.uploadingHoldings = false;
+        else this.uploadingActivity = false;
+      }
+    });
+  }
   
   cleanupClient() {
     if (!this.cleanupClientId) {

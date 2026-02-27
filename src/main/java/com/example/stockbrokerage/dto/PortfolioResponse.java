@@ -18,4 +18,10 @@ public class PortfolioResponse {
     private BigDecimal totalValue;
     private BigDecimal profitLoss;
     private BigDecimal profitLossPercent;
+    /** Average True Range (14-period) – null when insufficient data. */
+    private BigDecimal atr14;
+    /** 75th-percentile of the 14 daily True Ranges used in ATR(14) – typical spike magnitude. */
+    private BigDecimal atr75;
+    /** 90th-percentile of the 14 daily True Ranges used in ATR(14) – tail-risk day magnitude. */
+    private BigDecimal atr90;
 }
