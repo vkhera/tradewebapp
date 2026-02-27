@@ -230,12 +230,21 @@ stop-app.bat all
 | http://localhost:8080/actuator/prometheus | Raw metrics | — |
 | http://localhost:8080/actuator/health | Health check | — |
 
-### Pre-built Grafana Dashboard
+### Pre-built Grafana Dashboards
 
-A **Spring Boot Overview** dashboard is auto-provisioned at:
-`Dashboards → stock-brokerage → Spring Boot Overview`
+Two dashboards are **auto-provisioned** on first boot — no manual import required:
+
+#### Stock Brokerage Overview
+`Dashboards → Stock Brokerage → Stock Brokerage Overview`
+
+Panels: API Traffic (RPS, error rate, latency P50/P95/P99), JVM (heap, non-heap, GC), CPU & threads, HikariCP pool, **Batch Jobs** (prediction + trend run history, symbol coverage, weight update rates, error stream, rate-limit hits).
+
+#### Spring Boot Overview
+`Dashboards → Stock Brokerage → Spring Boot Overview`
 
 Panels: HTTP Request Rate, Error Rate, Latency (P50/P95/P99), JVM Heap, Non-Heap, GC pauses, CPU, HikariCP pool, Log events by level, Thread count, Process uptime.
+
+> **How provisioning works:** Grafana reads `observability/grafana/provisioning/` on startup. Datasources (`prometheus`, `loki`, `tempo`) are provisioned with fixed UIDs so dashboard panel references always resolve. Dashboard JSONs in `observability/grafana/dashboards/` are loaded automatically — no clicking "Import" needed.
 
 ### Trace → Log Correlation
 
