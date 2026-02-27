@@ -1,0 +1,403 @@
+{
+  "title": "Stock Brokerage — App Overview",
+  "uid": "stock-brokerage-overview",
+  "tags": ["stock-brokerage"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "time": { "from": "now-3h", "to": "now" },
+  "panels": [
+
+    { "type": "row", "title": "📊 Overview", "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }, "collapsed": false, "id": 100 },
+
+    {
+      "id": 1, "type": "stat", "title": "Request Rate (req/s)",
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 50 }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count{job=\"stock-brokerage\"}[1m]))", "legendFormat": "req/s", "refId": "A" }]
+    },
+
+    {
+      "id": 2, "type": "stat", "title": "Error Rate (5xx)",
+      "gridPos": { "x": 4, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null }, { "color": "yellow", "value": 0.01 }, { "color": "red", "value": 0.05 }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count{job=\"stock-brokerage\",status=~\"5..\"}[1m])) / sum(rate(http_server_requests_seconds_count{job=\"stock-brokerage\"}[1m]))", "legendFormat": "5xx %", "refId": "A" }]
+    },
+
+    {
+      "id": 3, "type": "stat", "title": "P99 Latency",
+      "gridPos": { "x": 8, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "s", "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 3 }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "expr": "histogram_quantile(0.99, sum by(le) (rate(http_server_requests_seconds_bucket{job=\"stock-brokerage\"}[5m])))", "legendFormat": "p99", "refId": "A" }]
+    },
+
+    {
+      "id": 4, "type": "stat", "title": "JVM Heap Used",
+      "gridPos": { "x": 12, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "bytes", "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null }, { "color": "yellow", "value": 400000000 }, { "color": "red", "value": 700000000 }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "expr": "sum(jvm_memory_used_bytes{job=\"stock-brokerage\",area=\"heap\"})", "legendFormat": "heap used", "refId": "A" }]
+    },
+
+    {
+      "id": 5, "type": "stat", "title": "DB Active Connections",
+      "gridPos": { "x": 16, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 9 }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "expr": "hikaricp_connections_active{job=\"stock-brokerage\"}", "legendFormat": "active", "refId": "A" }]
+    },
+
+    {
+      "id": 6, "type": "stat", "title": "Log Errors (last 5m)",
+      "gridPos": { "x": 20, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "expr": "increase(logback_events_total{job=\"stock-brokerage\",level=\"error\"}[5m])", "legendFormat": "errors", "refId": "A" }]
+    },
+
+    { "type": "row", "title": "🌐 HTTP API", "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 }, "collapsed": false, "id": 101 },
+
+    {
+      "id": 10, "type": "timeseries", "title": "Request Rate by Endpoint (req/s)",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "sum by(uri) (rate(http_server_requests_seconds_count{job=\"stock-brokerage\",uri!~\".*(actuator|favicon).*\"}[1m]))", "legendFormat": "{{uri}}", "refId": "A" }
+      ]
+    },
+
+    {
+      "id": 11, "type": "timeseries", "title": "Latency Percentiles (all endpoints)",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by(le) (rate(http_server_requests_seconds_bucket{job=\"stock-brokerage\",uri!~\".*(actuator|favicon).*\"}[5m])))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(http_server_requests_seconds_bucket{job=\"stock-brokerage\",uri!~\".*(actuator|favicon).*\"}[5m])))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(http_server_requests_seconds_bucket{job=\"stock-brokerage\",uri!~\".*(actuator|favicon).*\"}[5m])))", "legendFormat": "p99", "refId": "C" }
+      ]
+    },
+
+    {
+      "id": 12, "type": "timeseries", "title": "HTTP Status Codes (req/s)",
+      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10 } },
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": "5.." }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+          { "matcher": { "id": "byRegexp", "options": "4.." }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byRegexp", "options": "2.." }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "sum by(status) (rate(http_server_requests_seconds_count{job=\"stock-brokerage\",uri!~\".*(actuator|favicon).*\"}[1m]))", "legendFormat": "{{status}}", "refId": "A" }
+      ]
+    },
+
+    {
+      "id": 13, "type": "timeseries", "title": "Slowest Endpoints — P99 Latency",
+      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 5 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(uri,le) (rate(http_server_requests_seconds_bucket{job=\"stock-brokerage\",uri=~\".*(portfolio|predictions|atr|trades|prices).*\"}[5m])))", "legendFormat": "{{uri}}", "refId": "A" }
+      ]
+    },
+
+    { "type": "row", "title": "☕ JVM & Process", "gridPos": { "x": 0, "y": 21, "w": 24, "h": 1 }, "collapsed": false, "id": 102 },
+
+    {
+      "id": 20, "type": "timeseries", "title": "JVM Heap Memory",
+      "gridPos": { "x": 0, "y": 22, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "lineWidth": 2, "fillOpacity": 15 } } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "sum(jvm_memory_used_bytes{job=\"stock-brokerage\",area=\"heap\"})",      "legendFormat": "heap used",      "refId": "A" },
+        { "expr": "sum(jvm_memory_committed_bytes{job=\"stock-brokerage\",area=\"heap\"})", "legendFormat": "heap committed", "refId": "B" },
+        { "expr": "sum(jvm_memory_max_bytes{job=\"stock-brokerage\",area=\"heap\"})",       "legendFormat": "heap max",       "refId": "C" }
+      ]
+    },
+
+    {
+      "id": 21, "type": "timeseries", "title": "CPU Usage",
+      "gridPos": { "x": 8, "y": 22, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1, "min": 0, "custom": { "lineWidth": 2, "fillOpacity": 15 } } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "process_cpu_usage{job=\"stock-brokerage\"}",  "legendFormat": "process CPU", "refId": "A" },
+        { "expr": "system_cpu_usage{job=\"stock-brokerage\"}",   "legendFormat": "system CPU",  "refId": "B" }
+      ]
+    },
+
+    {
+      "id": 22, "type": "timeseries", "title": "JVM Threads",
+      "gridPos": { "x": 16, "y": 22, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "jvm_threads_live_threads{job=\"stock-brokerage\"}",   "legendFormat": "live",   "refId": "A" },
+        { "expr": "jvm_threads_daemon_threads{job=\"stock-brokerage\"}", "legendFormat": "daemon", "refId": "B" },
+        { "expr": "jvm_threads_peak_threads{job=\"stock-brokerage\"}",   "legendFormat": "peak",   "refId": "C" }
+      ]
+    },
+
+    {
+      "id": 23, "type": "timeseries", "title": "GC Pause Time (rate)",
+      "gridPos": { "x": 0, "y": 29, "w": 12, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "rate(jvm_gc_pause_seconds_sum{job=\"stock-brokerage\"}[1m])", "legendFormat": "{{action}} {{cause}}", "refId": "A" }
+      ]
+    },
+
+    {
+      "id": 24, "type": "timeseries", "title": "Log Events by Level (rate/min)",
+      "gridPos": { "x": 12, "y": 29, "w": 12, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10 } },
+        "overrides": [
+          { "matcher": { "id": "byFrameRefID", "options": "error" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+          { "matcher": { "id": "byFrameRefID", "options": "warn"  }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "rate(logback_events_total{job=\"stock-brokerage\",level=\"error\"}[1m]) * 60", "legendFormat": "ERROR", "refId": "error" },
+        { "expr": "rate(logback_events_total{job=\"stock-brokerage\",level=\"warn\"}[1m])  * 60", "legendFormat": "WARN",  "refId": "warn" },
+        { "expr": "rate(logback_events_total{job=\"stock-brokerage\",level=\"info\"}[1m])  * 60", "legendFormat": "INFO",  "refId": "info" }
+      ]
+    },
+
+    { "type": "row", "title": "🗄️ Database (HikariCP)", "gridPos": { "x": 0, "y": 35, "w": 24, "h": 1 }, "collapsed": false, "id": 103 },
+
+    {
+      "id": 30, "type": "timeseries", "title": "HikariCP Connection Pool",
+      "gridPos": { "x": 0, "y": 36, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "hikaricp_connections_active{job=\"stock-brokerage\"}",  "legendFormat": "active",  "refId": "A" },
+        { "expr": "hikaricp_connections_idle{job=\"stock-brokerage\"}",    "legendFormat": "idle",    "refId": "B" },
+        { "expr": "hikaricp_connections_pending{job=\"stock-brokerage\"}", "legendFormat": "pending", "refId": "C" },
+        { "expr": "hikaricp_connections{job=\"stock-brokerage\"}",         "legendFormat": "total",   "refId": "D" }
+      ]
+    },
+
+    {
+      "id": 31, "type": "timeseries", "title": "DB Connection Acquire Time (p99)",
+      "gridPos": { "x": 12, "y": 36, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.99, rate(hikaricp_connections_acquire_seconds_bucket{job=\"stock-brokerage\"}[5m]))", "legendFormat": "p99 acquire time", "refId": "A" },
+        { "expr": "histogram_quantile(0.50, rate(hikaricp_connections_acquire_seconds_bucket{job=\"stock-brokerage\"}[5m]))", "legendFormat": "p50 acquire time", "refId": "B" }
+      ]
+    },
+
+    { "type": "row", "title": "⚡ Redis", "gridPos": { "x": 0, "y": 43, "w": 24, "h": 1 }, "collapsed": false, "id": 104 },
+
+    {
+      "id": 40, "type": "timeseries", "title": "Redis Command Rate (req/s)",
+      "gridPos": { "x": 0, "y": 44, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "sum by(command) (rate(lettuce_command_completion_seconds_count{job=\"stock-brokerage\"}[1m]))", "legendFormat": "{{command}}", "refId": "A" }
+      ]
+    },
+
+    {
+      "id": 41, "type": "timeseries", "title": "Redis Command Latency (p99)",
+      "gridPos": { "x": 12, "y": 44, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(command,le) (rate(lettuce_command_completion_seconds_bucket{job=\"stock-brokerage\"}[5m])))", "legendFormat": "p99 {{command}}", "refId": "A" }
+      ]
+    },
+
+    { "type": "row", "title": "🔄 Batch Jobs", "gridPos": { "x": 0, "y": 51, "w": 24, "h": 1 }, "collapsed": false, "id": 105 },
+
+    {
+      "id": 50, "type": "logs", "title": "Prediction Batch — Run History (start & complete events)",
+      "description": "Shows every hourly execution: when the batch started, how many symbols were queued, and when it completed. Log source: StockPricePredictionBatchService INFO messages.",
+      "gridPos": { "x": 0, "y": 52, "w": 12, "h": 7 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [
+        { "expr": "{job=\"stock-brokerage\"} |~ \"hourly stock price prediction batch|Hourly prediction batch complete|skipping prediction batch\"", "refId": "A" }
+      ]
+    },
+
+    {
+      "id": 54, "type": "logs", "title": "Trend Analysis Batch — Run History (start & complete events)",
+      "description": "Shows every 10-minute execution: when the batch started, how many unique symbols were analysed, and when it completed. Log source: TrendAnalysisBatchService INFO messages.",
+      "gridPos": { "x": 12, "y": 52, "w": 12, "h": 7 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [
+        { "expr": "{job=\"stock-brokerage\"} |~ \"Starting scheduled trend analysis batch job|Completed scheduled trend analysis|No portfolio holdings found, skipping trend analysis\"", "refId": "A" }
+      ]
+    },
+
+    {
+      "id": 55, "type": "logs", "title": "Prediction Batch — Symbol Coverage (which stocks each run covered)",
+      "description": "Each line corresponds to one batch invocation and shows the complete list of symbols that were sent through predictions. Format: 'Running predictions for N symbols: [SYM1, SYM2, ...]'",
+      "gridPos": { "x": 0, "y": 59, "w": 24, "h": 6 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [
+        { "expr": "{job=\"stock-brokerage\"} |= \"Running predictions for\"", "refId": "A" }
+      ]
+    },
+
+    {
+      "id": 56, "type": "logs", "title": "Trend Batch — Symbol Coverage (which stocks each run covered)",
+      "description": "Each line corresponds to one batch invocation and shows how many unique portfolio symbols were included in that trend analysis run.",
+      "gridPos": { "x": 0, "y": 65, "w": 24, "h": 5 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [
+        { "expr": "{job=\"stock-brokerage\"} |= \"Analyzing trends for\"", "refId": "A" }
+      ]
+    },
+
+    {
+      "id": 57, "type": "logs", "title": "Prediction Weight Updates — per-symbol (resolved predictions → weight adjustment)",
+      "description": "Every resolved prediction batch updates per-symbol technique weights. Each line shows 'Updated per-stock weights for SYMBOL based on N resolved predictions'. The DEBUG lines show the individual weight change per technique: old → new.",
+      "gridPos": { "x": 0, "y": 70, "w": 12, "h": 8 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [
+        { "expr": "{job=\"stock-brokerage\"} |~ \"Updated per-stock weights for|avg error.*weight|Resolving past predictions\"", "refId": "A" }
+      ]
+    },
+
+    {
+      "id": 58, "type": "logs", "title": "Trend Weight Updates — per-symbol (P/L performance → technique weight adjustment)",
+      "description": "After each trend analysis the portfolio P/L% determines whether to increase or decrease technique weights. Shows 'Updated weights for SYMBOL based on actual trend: UPTREND|DOWNTREND|SIDEWAYS (avg P/L: X%)' and any failures.",
+      "gridPos": { "x": 12, "y": 70, "w": 12, "h": 8 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [
+        { "expr": "{job=\"stock-brokerage\"} |~ \"Updated weights for.*actual trend|Could not update weights for|Completed trend analysis and weight update\"", "refId": "A" }
+      ]
+    },
+
+    {
+      "id": 59, "type": "logs", "title": "Batch Job Errors & Rate-Limit Hits",
+      "description": "ERROR and WARN entries emitted by the batch services — failed symbol analyses, Yahoo Finance rate-limit hits, DB upsert failures, and index-correlation refresh errors.",
+      "gridPos": { "x": 0, "y": 78, "w": 14, "h": 7 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [
+        { "expr": "{job=\"stock-brokerage\"} |~ \"Error analyzing trend|Error calculating predictions|Error resolving predictions|Rate limit exceeded|Index correlation refresh failed|Could not update weights|DB upsert failed|Insufficient history\"", "refId": "A" }
+      ]
+    },
+
+    {
+      "id": 52, "type": "timeseries", "title": "Yahoo Finance Rate-Limit Hits (429 req/s)",
+      "description": "Tracks HTTP 429 responses from internal throttle middleware during batch symbol fetches — spikes indicate Yahoo Finance rate-limit pressure during large batch runs.",
+      "gridPos": { "x": 14, "y": 78, "w": 10, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 15 },
+          "color": { "mode": "fixed", "fixedColor": "orange" }
+        }
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "sum by(uri) (rate(http_server_requests_seconds_count{job=\"stock-brokerage\",status=\"429\"}[1m]))", "legendFormat": "429 → {{uri}}", "refId": "A" }
+      ]
+    },
+
+    { "type": "row", "title": "📈 Portfolio & Trading Paths", "gridPos": { "x": 0, "y": 85, "w": 24, "h": 1 }, "collapsed": false, "id": 106 },
+
+    {
+      "id": 60, "type": "timeseries", "title": "Portfolio API — Request Rate & Latency",
+      "gridPos": { "x": 0, "y": 86, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean","max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(http_server_requests_seconds_bucket{job=\"stock-brokerage\",uri=~\".*/portfolio.*\"}[5m])))", "legendFormat": "portfolio p99", "refId": "A" },
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(http_server_requests_seconds_bucket{job=\"stock-brokerage\",uri=~\".*/predictions.*\"}[5m])))", "legendFormat": "predictions p99", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(http_server_requests_seconds_bucket{job=\"stock-brokerage\",uri=~\".*/atr.*\"}[5m])))", "legendFormat": "atr p99", "refId": "C" },
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(http_server_requests_seconds_bucket{job=\"stock-brokerage\",uri=~\".*/trades.*\"}[5m])))", "legendFormat": "trades p99", "refId": "D" }
+      ]
+    },
+
+    {
+      "id": 61, "type": "timeseries", "title": "Trade Executions (req/s)",
+      "gridPos": { "x": 12, "y": 86, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean","max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "sum by(uri,method) (rate(http_server_requests_seconds_count{job=\"stock-brokerage\",uri=~\".*/trades.*\",status=~\"2..\"}[1m]))", "legendFormat": "{{method}} {{uri}}", "refId": "A" }
+      ]
+    }
+
+  ]
+}

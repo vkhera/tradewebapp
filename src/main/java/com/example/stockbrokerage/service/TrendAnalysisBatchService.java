@@ -12,7 +12,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,30 +46,31 @@ public class TrendAnalysisBatchService {
                 .collect(Collectors.groupingBy(Portfolio::getSymbol));
             
             log.info("Analyzing trends for {} unique symbols", portfoliosBySymbol.size());
-            
-            // Analyze trends and update weights in parallel
-            List<CompletableFuture<Void>> futures = portfoliosBySymbol.entrySet().stream()
-                .map(entry -> CompletableFuture.runAsync(() -> {
-                    String symbol = entry.getKey();
-                    List<Portfolio> portfolios = entry.getValue();
-                    
-                    try {
-                        // Calculate new trend prediction
-                        trendAnalysisService.analyzeTrend(symbol);
-                        
-                        // Update weights based on actual performance
-                        updateWeightsForSymbol(symbol, portfolios);
-                        
-                        log.debug("Completed trend analysis and weight update for {}", symbol);
-                    } catch (Exception e) {
-                        log.error("Error analyzing trend for {}: {}", symbol, e.getMessage());
-                    }
-                }))
-                .toList();
-            
-            // Wait for all analyses to complete
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-            
+
+            // Process symbols sequentially with a 1-second pause between each.
+            // This keeps us well within TrendAnalysisService's rate limit while
+            // still completing all 58 symbols in under a minute — fast enough for
+            // the 10-minute batch window. Parallel scatter previously caused 50+
+            // concurrent calls, saturating the rate limiter immediately.
+            for (Map.Entry<String, List<Portfolio>> entry : portfoliosBySymbol.entrySet()) {
+                String symbol = entry.getKey();
+                List<Portfolio> portfolios = entry.getValue();
+                try {
+                    trendAnalysisService.analyzeTrend(symbol);
+                    updateWeightsForSymbol(symbol, portfolios);
+                    log.debug("Completed trend analysis and weight update for {}", symbol);
+                } catch (Exception e) {
+                    log.error("Error analyzing trend for {}: {}", symbol, e.getMessage());
+                }
+                try {
+                    Thread.sleep(1_000); // 1 s between stocks — respects rate limiter, ~1 min for 58 symbols
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Trend batch interrupted after {} symbols", symbol);
+                    break;
+                }
+            }
+
             log.info("Completed scheduled trend analysis for {} symbols", portfoliosBySymbol.size());
             
         } catch (Exception e) {

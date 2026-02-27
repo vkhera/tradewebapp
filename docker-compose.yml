@@ -59,7 +59,7 @@ services:
     volumes:
       # Mount live-editable throttle config — edit on host, reloaded within 60 s
       - ./config:/app/config:ro
-      - app_logs:/app/logs
+      - ./logs:/app/logs
       # Mount importexport directory so CSV files placed on the host are visible to the container
       - ./importexport:/app/importexport
       # Persist prediction CSV caches across container restarts
@@ -119,4 +119,3 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  app_logs:

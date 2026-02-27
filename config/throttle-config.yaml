@@ -68,7 +68,7 @@ services:
 
   TrendAnalysisService:
     rate-limiter:
-      limit-for-period: 6
+      limit-for-period: 6           # protects on-demand API calls; batch now processes symbols sequentially (1 s apart)
 
   FraudDetectionService:
     rate-limiter:
