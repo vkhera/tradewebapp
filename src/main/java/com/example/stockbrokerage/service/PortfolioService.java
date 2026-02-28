@@ -72,7 +72,13 @@ public class PortfolioService {
     }
     
     private PortfolioResponse convertToResponse(Portfolio portfolio) {
-        BigDecimal currentPrice = stockPriceService.getCurrentPrice(portfolio.getSymbol());
+        BigDecimal currentPrice;
+        try {
+            currentPrice = stockPriceService.getCurrentPrice(portfolio.getSymbol());
+        } catch (Exception e) {
+            log.warn("Price fetch failed for {}: {} — using average price as fallback", portfolio.getSymbol(), e.getMessage());
+            currentPrice = portfolio.getAveragePrice();
+        }
         BigDecimal totalValue = currentPrice.multiply(BigDecimal.valueOf(portfolio.getQuantity()));
         BigDecimal investedValue = portfolio.getAveragePrice().multiply(BigDecimal.valueOf(portfolio.getQuantity()));
         BigDecimal profitLoss = totalValue.subtract(investedValue);
@@ -84,7 +90,13 @@ public class PortfolioService {
         // No blocking operations during portfolio page load
 
         // ATR-14 + percentiles: approximated from 5-min close history (daily high/low = intraday max/min)
-        AtrService.AtrResult atrResult = atrService.computeAtrResult(portfolio.getSymbol());
+        // Wrapped in try/catch so a throttle or data exception on one symbol never fails the whole portfolio load.
+        AtrService.AtrResult atrResult = null;
+        try {
+            atrResult = atrService.computeAtrResult(portfolio.getSymbol());
+        } catch (Exception e) {
+            log.warn("ATR computation failed for {}: {}", portfolio.getSymbol(), e.getMessage());
+        }
         BigDecimal atr14 = atrResult != null ? atrResult.atr14() : null;
         BigDecimal atr75 = atrResult != null ? atrResult.atr75() : null;
         BigDecimal atr90 = atrResult != null ? atrResult.atr90() : null;

@@ -54,7 +54,10 @@ services:
 
   StockPriceService:
     rate-limiter:
-      limit-for-period: 20
+      # RealYahooFinanceClient has its own 5-min in-memory price cache, so most
+      # calls here are cache hits. Allow enough headroom for a full 60-symbol
+      # portfolio page load without triggering rate-limit errors.
+      limit-for-period: 120
 
   StockMarketDataService:
     rate-limiter:
@@ -103,6 +106,14 @@ services:
 
   # Internal helpers — disable to avoid counting them as separate throttled units
   AuditService:
+    rate-limiter:
+      enabled: false
+    circuit-breaker:
+      enabled: false
+
+  # Local computation only (uses in-memory cached data — no external API calls).
+  # Rate-limiting causes portfolio page failures when 55 symbols load in parallel.
+  AtrService:
     rate-limiter:
       enabled: false
     circuit-breaker:
