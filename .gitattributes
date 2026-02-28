@@ -1,0 +1,5 @@
+# Ensure shell scripts and Docker entrypoints always use LF (Unix)
+# so they run correctly inside Linux containers regardless of developer OS.
+*.sh        text eol=lf
+*.conf      text eol=lf
+Dockerfile* text eol=lf
