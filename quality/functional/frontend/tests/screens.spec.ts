@@ -87,7 +87,7 @@ test.describe('Frontend screen coverage', () => {
     test(`client screen renders: ${screen.route}`, async ({ page }) => {
       await bootstrapSession(page, 'CLIENT');
       await page.goto(screen.route);
-      await expect(page.getByRole('heading', { name: screen.heading })).toBeVisible();
+      await expect(page.getByRole('heading', { name: screen.heading }).first()).toBeVisible();
       await expect(page.getByText('Stock Brokerage')).toBeVisible();
     });
   }
@@ -96,7 +96,7 @@ test.describe('Frontend screen coverage', () => {
     test(`admin screen renders: ${screen.route}`, async ({ page }) => {
       await bootstrapSession(page, 'ADMIN');
       await page.goto(screen.route);
-      await expect(page.getByRole('heading', { name: screen.heading })).toBeVisible();
+      await expect(page.getByRole('heading', { name: screen.heading }).first()).toBeVisible();
       await expect(page.getByText('Stock Brokerage')).toBeVisible();
     });
   }
