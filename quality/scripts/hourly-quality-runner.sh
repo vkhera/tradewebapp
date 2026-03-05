@@ -16,11 +16,15 @@ mkdir -p "$(dirname "$OBS_LOG_FILE")"
 
 cd "$REPO_DIR"
 
-echo "[scheduler] Repo directory: $REPO_DIR"
-echo "[scheduler] Interval seconds: $INTERVAL_SECONDS"
-echo "[scheduler] Playwright base URL: $PLAYWRIGHT_BASE_URL"
-echo "[scheduler] API base URL: $BASE_URL"
-echo "[scheduler] Observability log file: $OBS_LOG_FILE"
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] [scheduler] $*"
+}
+
+log "Repo directory: $REPO_DIR"
+log "Interval seconds: $INTERVAL_SECONDS"
+log "Playwright base URL: $PLAYWRIGHT_BASE_URL"
+log "API base URL: $BASE_URL"
+log "Observability log file: $OBS_LOG_FILE"
 
 log_json() {
   local level="$1"
@@ -33,27 +37,27 @@ log_json() {
 }
 
 if [ ! -d "$QUALITY_DIR/node_modules" ]; then
-  echo "[scheduler] Installing quality dependencies..."
+  log "Installing quality dependencies..."
   npm --prefix "$QUALITY_DIR" ci
 fi
 
 if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
-  echo "[scheduler] Installing frontend dependencies..."
+  log "Installing frontend dependencies..."
   npm --prefix "$FRONTEND_DIR" ci
 fi
 
 if [ "${INSTALL_PLAYWRIGHT_BROWSERS:-false}" = "true" ]; then
-  echo "[scheduler] Installing Playwright browsers..."
+  log "Installing Playwright browsers..."
   npm --prefix "$QUALITY_DIR" exec -- playwright install --with-deps
 fi
 
 wait_for_targets() {
-  echo "[scheduler] Waiting for backend health..."
+  log "Waiting for backend health..."
   until curl -fsS "$BASE_URL/actuator/health" >/dev/null; do
     sleep 5
   done
 
-  echo "[scheduler] Waiting for frontend..."
+  log "Waiting for frontend..."
   until curl -fsS "$PLAYWRIGHT_BASE_URL" >/dev/null; do
     sleep 5
   done
@@ -64,7 +68,7 @@ run_suite_once() {
   ts="$(date +%Y%m%d_%H%M%S)"
   local log_file="$REPORTS_DIR/hourly_suite_${ts}.log"
 
-  echo "[scheduler] Starting dynamic quality suite at $ts"
+  log "Starting dynamic quality suite at $ts"
   log_json "INFO" "Starting dynamic quality suite at $ts"
 
   set +e
@@ -94,10 +98,10 @@ run_suite_once() {
   } >"$latest"
 
   if [ "$exit_code" -eq 0 ]; then
-    echo "[scheduler] Suite passed ($ts). Log: $log_file"
+    log "Suite passed ($ts). Log: $log_file"
     log_json "INFO" "Dynamic suite passed ($ts). Log: $log_file"
   else
-    echo "[scheduler] Suite failed ($ts). Log: $log_file"
+    log "Suite failed ($ts). Log: $log_file"
     log_json "ERROR" "Dynamic suite failed ($ts). Log: $log_file"
   fi
 }
@@ -107,7 +111,7 @@ sleep_until_next_hour() {
   now=$(date +%s)
   next=$(( (now / INTERVAL_SECONDS + 1) * INTERVAL_SECONDS ))
   delay=$(( next - now ))
-  echo "[scheduler] Sleeping $delay seconds until next run..."
+  log "Sleeping $delay seconds until next run..."
   sleep "$delay"
 }
 
