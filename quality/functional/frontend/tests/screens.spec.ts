@@ -57,7 +57,10 @@ test.describe('Frontend screen coverage', () => {
       buffer: Buffer.from('Date,Action,Symbol,Quantity,Price\n2026-02-27,BUY,TQQQ,1,10.00\n')
     });
 
-    await expect(page.locator('.drop-zone-filename').nth(1)).toContainText('.csv', { timeout: 15000 });
+    // The activity section is the last .import-section; scope the locator to it
+    // so the test doesn't depend on whether the holdings drop zone also has a file
+    const activitySection = page.locator('.import-section').last();
+    await expect(activitySection.locator('.drop-zone-filename')).toContainText('.csv', { timeout: 15000 });
     await expect(page.getByRole('button', { name: 'Import Activity' })).toBeEnabled();
   });
 
