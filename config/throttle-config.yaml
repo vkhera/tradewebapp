@@ -71,7 +71,9 @@ services:
 
   TrendAnalysisService:
     rate-limiter:
-      limit-for-period: 6           # protects on-demand API calls; batch now processes symbols sequentially (1 s apart)
+      # getLastPrediction reads local CSV files — no external API calls. Portfolio page fires
+      # 30-60 parallel /api/trends/last/{symbol} requests; 6/s was causing mass 429 errors.
+      limit-for-period: 120         # allows a full 60-symbol portfolio to load twice per second
 
   FraudDetectionService:
     rate-limiter:

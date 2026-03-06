@@ -46,7 +46,9 @@ services:
       failure-rate-threshold: 30.0
   TrendAnalysisService:
     rate-limiter:
-      limit-for-period: 5
+      # getLastPrediction reads local CSV files — no external API calls. Portfolio page fires
+      # 30-60 parallel /api/trends/last/{symbol} requests; 5/s was causing mass 429 errors.
+      limit-for-period: 120         # allows a full 60-symbol portfolio to load twice per second
   FraudDetectionService:
     rate-limiter:
       limit-for-period: 10
