@@ -254,4 +254,25 @@ export class ApiService {
   getSuggestedTrades(clientId: number): Observable<any[]> {
     return this.http.get<any[]>(`${this.baseUrl}/suggestions/${clientId}`, this.getHttpOptions());
   }
+
+  getSuggestedTradeHistory(clientId: number): Observable<any[]> {
+    return this.http.get<any[]>(`${this.baseUrl}/suggestions/${clientId}/history`, this.getHttpOptions());
+  }
+
+  getSuggestedTradeSuccessRate(clientId: number): Observable<any> {
+    return this.http.get<any>(`${this.baseUrl}/suggestions/${clientId}/success-rate`, this.getHttpOptions());
+  }
+
+  // Swing Trades API
+  getSwingTradeSuggestions(clientId: number): Observable<any[]> {
+    return this.http.get<any[]>(`${this.baseUrl}/swing-trades/suggestions/${clientId}`, this.getHttpOptions());
+  }
+
+  getSwingTradeHistory(clientId: number): Observable<any[]> {
+    return this.http.get<any[]>(`${this.baseUrl}/swing-trades/${clientId}/history`, this.getHttpOptions());
+  }
+
+  getSwingTradeSuccessRate(clientId: number): Observable<any> {
+    return this.http.get<any>(`${this.baseUrl}/swing-trades/${clientId}/success-rate`, this.getHttpOptions());
+  }
 }

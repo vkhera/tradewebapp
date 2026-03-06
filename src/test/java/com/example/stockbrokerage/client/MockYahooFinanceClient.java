@@ -1,11 +1,13 @@
 package com.example.stockbrokerage.client;
 
+import com.example.stockbrokerage.dto.DailyBar;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -74,6 +76,28 @@ public class MockYahooFinanceClient implements YahooFinanceClient {
         log.debug("[MockYahooFinanceClient] getHistoricalPrices({}) → {} bars, last={}",
                 symbol, prices.size(), prices.getLast());
         return prices;
+    }
+
+    @Override
+    public List<DailyBar> getDailyBars(String symbol, int days) {
+        // Generate deterministic daily OHLCV bars using the same seeded random walk
+        List<BigDecimal> closes = generateDeterministicPrices(symbol, days);
+        List<DailyBar> bars = new ArrayList<>(days);
+        LocalDate date = LocalDate.now().minusDays(days);
+        long seed = symbol.hashCode();
+        for (int i = 0; i < closes.size(); i++) {
+            date = date.plusDays(1);
+            BigDecimal close = closes.get(i);
+            seed = Math.abs(seed * 6_364_136_223_846_793_005L + 1_442_695_040_888_963_407L);
+            BigDecimal spread = close.multiply(BigDecimal.valueOf(0.01));
+            BigDecimal high   = close.add(spread);
+            BigDecimal low    = close.subtract(spread).max(BigDecimal.ONE);
+            BigDecimal open   = close.add(spread.multiply(BigDecimal.valueOf(0.3)));
+            long volume       = 1_000_000L + (seed & 0xFFFFFL);
+            bars.add(new DailyBar(date, open, high, low, close, volume));
+        }
+        log.debug("[MockYahooFinanceClient] getDailyBars({}) → {} bars", symbol, bars.size());
+        return bars;
     }
 
     // -------------------------------------------------------------------------

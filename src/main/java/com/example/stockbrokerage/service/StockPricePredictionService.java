@@ -79,6 +79,9 @@ public class StockPricePredictionService {
     private final StockPredictionWeightHistoryRepository     weightHistoryRepository;
     private final MarketIndexService                         marketIndexService;
 
+    /** Overridable clock – set in unit tests to simulate a fixed point in time. */
+    java.time.Clock clock = java.time.Clock.systemDefaultZone();
+
     // ================================================================= public API
 
     /**
@@ -126,7 +129,7 @@ public class StockPricePredictionService {
         BigDecimal currentPrice = history.getLast();
         Map<String, Double> weights = loadWeights(symbol);
 
-        LocalDateTime baseHour = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime baseHour = LocalDateTime.now(clock).withMinute(0).withSecond(0).withNano(0);
 
         // ── Market-index adjustment (computed once per prediction run) ─────────
         // The adjustment factor is a signed decimal (e.g. 0.005 = +0.5%).
@@ -177,7 +180,7 @@ public class StockPricePredictionService {
             symbol, currentPrice, baseHour,
             hourlyPredictions, new LinkedHashMap<>(weights),
             averageConfidence(hourlyPredictions), false,
-            LocalDateTime.now(), List.of(), indexInfluences
+            LocalDateTime.now(clock), List.of(), indexInfluences
         );
 
         log.info("Completed predictions for {} – current price: {}, 1h prediction: {}",
@@ -193,7 +196,7 @@ public class StockPricePredictionService {
         log.info("Resolving past predictions and updating weights for {}", symbol);
 
         BigDecimal currentPrice = marketDataService.getCurrentPrice(symbol);
-        LocalDateTime now = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime now = LocalDateTime.now(clock).withMinute(0).withSecond(0).withNano(0);
 
         // Find DB predictions whose target hour has passed but actual price not filled
         List<StockPricePrediction> unresolved = repository.findUnresolvedPredictions(symbol, now);
@@ -401,7 +404,7 @@ public class StockPricePredictionService {
     @Transactional
     void saveWeights(String symbol, Map<String, Double> weights) {
         Path path = Paths.get(weightsFilePath(symbol));
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         try (PrintWriter w = new PrintWriter(new FileWriter(path.toFile()))) {
             w.println("Technique,Weight,LastUpdated");
             weights.forEach((t, wt) -> {
@@ -482,12 +485,12 @@ public class StockPricePredictionService {
     private static final ZoneId EASTERN = ZoneId.of("America/New_York");
 
     private StockPricePredictionResponse loadLatestFromDb(String symbol) {
-        LocalDateTime cutoff     = LocalDateTime.now().minusMinutes(50);
-        LocalDateTime nowHour    = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime cutoff     = LocalDateTime.now(clock).minusMinutes(50);
+        LocalDateTime nowHour    = LocalDateTime.now(clock).withMinute(0).withSecond(0).withNano(0);
         // Use Eastern market hours converted to server UTC for DB queries
-        LocalDate todayET        = LocalDate.now(EASTERN);
-        LocalDateTime todayOpen  = todayET.atTime(9, 0).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
-        LocalDateTime todayClose = todayET.atTime(17, 0).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
+        LocalDate todayET        = LocalDate.now(clock.withZone(EASTERN));
+        LocalDateTime todayOpen  = todayET.atTime(9, 30).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
+        LocalDateTime todayClose = todayET.atTime(16, 0).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
 
         // Fetch all of today's market-hours predictions (past + future for today)
         List<StockPricePrediction> recs =
@@ -550,9 +553,9 @@ public class StockPricePredictionService {
      * Returns the previous business day's hourly predictions with actual prices filled in.
      */
     private List<HourlyPricePrediction> loadPreviousDayFromDb(String symbol) {
-        LocalDate prevDay      = getPreviousBusinessDay(LocalDate.now(EASTERN));
-        LocalDateTime prevOpen  = prevDay.atTime(9, 0).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
-        LocalDateTime prevClose = prevDay.atTime(17, 0).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
+        LocalDate prevDay      = getPreviousBusinessDay(LocalDate.now(clock.withZone(EASTERN)));
+        LocalDateTime prevOpen  = prevDay.atTime(9, 30).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
+        LocalDateTime prevClose = prevDay.atTime(16, 0).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
 
         List<StockPricePrediction> recs =
             repository.findBySymbolAndTargetHourBetweenOrderByTargetHourAsc(symbol, prevOpen, prevClose);

@@ -2,6 +2,7 @@ package com.example.stockbrokerage.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.stockbrokerage.dto.DailyBar;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.*;
@@ -10,6 +11,8 @@ import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -120,6 +123,36 @@ public class RealYahooFinanceClient implements YahooFinanceClient {
         }
     }
 
+    @Override
+    public List<DailyBar> getDailyBars(String symbol, int days) {
+        try {
+            // Use 6mo range for up to ~126 trading days of daily OHLCV data
+            String range = days <= 60 ? "3mo" : "6mo";
+            String url = "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=%s"
+                    .formatted(symbol, range);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("User-Agent", USER_AGENT);
+            headers.set("Accept", "application/json");
+            headers.set("Accept-Language", "en-US,en;q=0.9");
+
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+            ResponseEntity<String> response =
+                    restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+
+            if (response.getStatusCode() != HttpStatus.OK || response.getBody() == null) {
+                log.warn("Yahoo Finance daily chart returned {} for {}", response.getStatusCode(), symbol);
+                return List.of();
+            }
+
+            return parseDailyBarsResponse(response.getBody(), symbol);
+
+        } catch (Exception e) {
+            log.warn("Failed to fetch daily bars from Yahoo Finance for {}: {}", symbol, e.getMessage());
+            return List.of();
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers — price endpoints
     // -------------------------------------------------------------------------
@@ -221,6 +254,56 @@ public class RealYahooFinanceClient implements YahooFinanceClient {
     // -------------------------------------------------------------------------
     // Private helpers — historical data
     // -------------------------------------------------------------------------
+
+    private List<DailyBar> parseDailyBarsResponse(String json, String symbol) {
+        List<DailyBar> bars = new ArrayList<>();
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            JsonNode result = root.path("chart").path("result");
+            if (result.isEmpty() || !result.isArray()) return bars;
+
+            JsonNode firstResult = result.get(0);
+            JsonNode timestamps  = firstResult.path("timestamp");
+            JsonNode quote = firstResult.path("indicators").path("quote").get(0);
+
+            if (!timestamps.isArray() || quote == null) return bars;
+
+            JsonNode opens   = quote.path("open");
+            JsonNode highs   = quote.path("high");
+            JsonNode lows    = quote.path("low");
+            JsonNode closes  = quote.path("close");
+            JsonNode volumes = quote.path("volume");
+
+            for (int i = 0; i < timestamps.size(); i++) {
+                JsonNode closeNode = closes.get(i);
+                if (closeNode == null || closeNode.isNull()) continue;
+
+                long epochSec = timestamps.get(i).asLong();
+                java.time.LocalDate date = Instant.ofEpochSecond(epochSec)
+                        .atZone(ZoneId.of("America/New_York")).toLocalDate();
+
+                BigDecimal open  = safeDecimal(opens,   i);
+                BigDecimal high  = safeDecimal(highs,   i);
+                BigDecimal low   = safeDecimal(lows,    i);
+                BigDecimal close = safeDecimal(closes,  i);
+                long volume = (volumes != null && !volumes.get(i).isNull())
+                        ? volumes.get(i).asLong() : 0L;
+
+                bars.add(new DailyBar(date, open, high, low, close, volume));
+            }
+            log.info("Fetched {} daily bars for {} from Yahoo Finance", bars.size(), symbol);
+        } catch (Exception e) {
+            log.error("Error parsing daily bars for {}: {}", symbol, e.getMessage());
+        }
+        return bars;
+    }
+
+    private BigDecimal safeDecimal(JsonNode array, int index) {
+        if (array == null) return BigDecimal.ZERO;
+        JsonNode node = array.get(index);
+        if (node == null || node.isNull()) return BigDecimal.ZERO;
+        return BigDecimal.valueOf(node.asDouble()).setScale(4, RoundingMode.HALF_UP);
+    }
 
     private List<BigDecimal> parseHistoricalResponse(String json, String symbol) {
         List<BigDecimal> prices = new ArrayList<>();

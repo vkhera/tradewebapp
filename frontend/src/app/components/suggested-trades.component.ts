@@ -31,6 +31,24 @@ interface SuggestedTradeHistory {
   resolvedDate: string | null;
 }
 
+interface SwingTradeSuggestion {
+  id: number | null;
+  symbol: string;
+  quantity: number;
+  currentPrice: number;
+  action: 'HOLD' | 'SELL';
+  targetPrice: number;
+  stopLoss: number;
+  predictedReturnPct: number;
+  holdDaysEstimated: number;
+  confidence: number;
+  topStrategies: string;
+  reasoning: string;
+  suggestedDate: string;
+  status: 'PENDING' | 'SUCCESS' | 'FAILED';
+  resolvedDate: string | null;
+}
+
 interface SuccessRate {
   totalResolved: number;
   successCount: number;
@@ -60,8 +78,8 @@ interface SuccessRate {
             <div class="rate-detail">{{ successRate.successCount }} of {{ successRate.totalResolved }} resolved</div>
           </div>
         </div>
-        <button class="btn btn-refresh" (click)="loadAll()" [disabled]="loading">
-          {{ loading ? '⏳ Loading...' : '🔄 Refresh' }}
+        <button class="btn btn-refresh" (click)="loadAll()" [disabled]="loading || swingLoading">
+          {{ (loading || swingLoading) ? '⏳ Loading...' : '🔄 Refresh All' }}
         </button>
       </div>
 
@@ -151,6 +169,87 @@ interface SuccessRate {
         They do not constitute financial advice. Always do your own research before trading.
       </div>
 
+      <!-- ── Swing Trade Suggestions ── -->
+      <div class="swing-section">
+        <div class="swing-header-row">
+          <div>
+            <h3>🏄 Swing Trade Suggestions</h3>
+            <p class="subtitle">Multi-day swing analysis using RSI, MACD, Bollinger Bands, EMA Crossover and Volume Momentum.</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <button class="btn btn-refresh" (click)="refreshSwing()" [disabled]="swingLoading">
+              {{ swingLoading ? '⏳ Analysing...' : '🔄 Refresh' }}
+            </button>
+            <div *ngIf="swingSuccessRate && (swingSuccessRate.totalResolved > 0)" class="success-rate-badge"
+                 [class.good]="swingSuccessRate.successRatePct >= 50" [class.poor]="swingSuccessRate.successRatePct < 50">
+              <div class="rate-value">{{ swingSuccessRate.successRatePct | number:'1.1-1' }}%</div>
+              <div class="rate-label">Swing Rate</div>
+              <div class="rate-detail">{{ swingSuccessRate.successCount }}/{{ swingSuccessRate.totalResolved }} resolved</div>
+            </div>
+          </div>
+        </div>
+
+        <div *ngIf="swingLoading" class="loading-spinner">Analysing holdings…</div>
+
+        <div *ngIf="!swingLoading && swingError" class="error-box">{{ swingError }}</div>
+
+        <div *ngIf="!swingLoading && !swingError && swingSuggestions.length === 0" class="no-data" style="margin-top:0">
+          <div class="no-data-icon">📊</div>
+          <p>No swing trade signals at this time.</p>
+          <p class="no-data-hint">Technical strategies did not detect sufficient conviction in any held position.</p>
+        </div>
+
+        <table *ngIf="!swingLoading && swingSuggestions.length > 0" class="swing-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Symbol</th>
+              <th>Shares</th>
+              <th>Current Price</th>
+              <th>Action</th>
+              <th>Target Price</th>
+              <th>Est. Return</th>
+              <th>Stop Loss</th>
+              <th>Hold Days</th>
+              <th>Confidence</th>
+              <th>Strategies</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let s of swingSuggestions; let i = index"
+                [class.swing-hold]="s.action === 'HOLD'" [class.swing-sell]="s.action === 'SELL'"
+                [title]="s.reasoning">
+              <td class="rank-cell">#{{ i + 1 }}</td>
+              <td class="symbol-cell">{{ s.symbol }}</td>
+              <td>{{ s.quantity }}</td>
+              <td>\${{ s.currentPrice | number:'1.2-2' }}</td>
+              <td>
+                <span class="action-pill" [class.hold-pill]="s.action === 'HOLD'" [class.swing-sell-pill]="s.action === 'SELL'">
+                  {{ s.action === 'HOLD' ? '📈 HOLD' : '📉 SELL' }}
+                </span>
+              </td>
+              <td>\${{ s.targetPrice | number:'1.2-2' }}</td>
+              <td class="positive">+{{ s.predictedReturnPct | number:'1.1-1' }}%</td>
+              <td class="negative">\${{ s.stopLoss | number:'1.2-2' }}</td>
+              <td>~{{ s.holdDaysEstimated }}d</td>
+              <td>
+                <div class="mini-confidence">
+                  <div class="mini-fill" [style.width]="s.confidence + '%'"
+                       [style.background]="s.action === 'HOLD' ? '#28a745' : '#dc3545'"></div>
+                  <span class="mini-label">{{ s.confidence }}%</span>
+                </div>
+              </td>
+              <td class="strategies-cell">{{ s.topStrategies }}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div *ngIf="swingSuggestions.length > 0" class="swing-disclaimer">
+          ℹ️ HOLD = bullish signal; hold your position targeting the listed price.
+          SELL = bearish signal; consider exiting and re-entering near the target price.
+        </div>
+      </div>
+
       <!-- ── History Table (last 5 days) ── -->
       <div class="history-section">
         <h3>📋 Suggested Trades — Last 5 Days</h3>
@@ -210,6 +309,59 @@ interface SuccessRate {
           <div class="stat-chip pending-chip">⏳ {{ successRate.pendingCount }} Pending</div>
           <div class="stat-chip rate-chip">
             🎯 {{ successRate.successRatePct | number:'1.1-1' }}% success rate
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Swing Trade History (last 5 days) ── -->
+      <div *ngIf="swingHistory.length > 0" class="history-section">
+        <h3>🏄 Swing Trade History — Last 5 Days</h3>
+        <table class="history-table swing-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Symbol</th>
+              <th>Action</th>
+              <th>Entry Price</th>
+              <th>Target Price</th>
+              <th>Est. Return</th>
+              <th>Confidence</th>
+              <th>Hold Days</th>
+              <th>Status</th>
+              <th>Resolved</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let h of swingHistory"
+                [class.row-success]="h.status === 'SUCCESS'" [class.row-failed]="h.status === 'FAILED'" [class.row-pending]="h.status === 'PENDING'">
+              <td>{{ formatDate(h.suggestedDate) }}</td>
+              <td class="symbol-cell">{{ h.symbol }}</td>
+              <td>
+                <span class="action-pill" [class.hold-pill]="h.action === 'HOLD'" [class.swing-sell-pill]="h.action === 'SELL'">
+                  {{ h.action === 'HOLD' ? '📈 HOLD' : '📉 SELL' }}
+                </span>
+              </td>
+              <td>\${{ h.currentPrice | number:'1.2-2' }}</td>
+              <td>\${{ h.targetPrice | number:'1.2-2' }}</td>
+              <td class="positive">+{{ h.predictedReturnPct | number:'1.1-1' }}%</td>
+              <td>{{ h.confidence }}%</td>
+              <td>~{{ h.holdDaysEstimated }}d</td>
+              <td>
+                <span class="status-badge" [class.status-success]="h.status === 'SUCCESS'" [class.status-failed]="h.status === 'FAILED'" [class.status-pending]="h.status === 'PENDING'">
+                  {{ h.status === 'SUCCESS' ? '✅ SUCCESS' : h.status === 'FAILED' ? '❌ FAILED' : '⏳ PENDING' }}
+                </span>
+              </td>
+              <td class="muted">{{ h.resolvedDate ? formatDate(h.resolvedDate) : '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div *ngIf="swingSuccessRate && (swingSuccessRate.totalResolved > 0 || swingSuccessRate.pendingCount > 0)" class="stats-row">
+          <div class="stat-chip success-chip">✅ {{ swingSuccessRate.successCount }} Successful</div>
+          <div class="stat-chip failed-chip">❌ {{ swingSuccessRate.failedCount }} Failed</div>
+          <div class="stat-chip pending-chip">⏳ {{ swingSuccessRate.pendingCount }} Pending</div>
+          <div class="stat-chip rate-chip">
+            🎯 {{ swingSuccessRate.successRatePct | number:'1.1-1' }}% swing success rate
           </div>
         </div>
       </div>
@@ -596,6 +748,99 @@ interface SuccessRate {
     .failed-chip  { background: #f8d7da; color: #721c24; }
     .pending-chip { background: #fff3cd; color: #856404; }
     .rate-chip    { background: #cce5ff; color: #004085; }
+
+    /* ── Swing trade section ── */
+    .swing-section {
+      margin-top: 32px;
+      margin-bottom: 32px;
+    }
+
+    .swing-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+      border-bottom: 2px solid #e9ecef;
+      padding-bottom: 8px;
+    }
+
+    .swing-header-row h3 {
+      font-size: 1.3rem;
+      color: #1a1a2e;
+      margin: 0 0 4px;
+    }
+
+    .swing-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.07);
+    }
+
+    .swing-table thead tr { background: #1a1a2e; color: #fff; }
+
+    .swing-table th {
+      padding: 10px 10px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .swing-table tbody tr { border-bottom: 1px solid #f0f0f0; transition: background 0.1s; }
+    .swing-table tbody tr:hover { background: #f9f9f9; }
+    .swing-table td { padding: 9px 10px; vertical-align: middle; }
+
+    .swing-hold { border-left: 3px solid #28a745; }
+    .swing-sell { border-left: 3px solid #dc3545; }
+
+    .rank-cell { color: #888; font-weight: 700; }
+
+    .hold-pill      { background: #d4edda; color: #155724; }
+    .swing-sell-pill { background: #f8d7da; color: #721c24; }
+
+    .strategies-cell { font-size: 0.78rem; color: #555; max-width: 140px; word-break: break-word; }
+
+    .mini-confidence {
+      position: relative;
+      width: 72px;
+      height: 16px;
+      background: #e9ecef;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .mini-fill {
+      height: 100%;
+      border-radius: 8px;
+      transition: width 0.5s;
+    }
+
+    .mini-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .swing-disclaimer {
+      margin-top: 10px;
+      font-size: 0.78rem;
+      color: #666;
+      background: #f0f4f8;
+      padding: 8px 14px;
+      border-radius: 6px;
+    }
   `]
 })
 export class SuggestedTradesComponent implements OnInit {
@@ -605,6 +850,12 @@ export class SuggestedTradesComponent implements OnInit {
   loading = false;
   historyLoading = false;
   error: string | null = null;
+
+  swingSuggestions: SwingTradeSuggestion[] = [];
+  swingHistory: SwingTradeSuggestion[] = [];
+  swingSuccessRate: { totalResolved: number; successCount: number; failedCount: number; pendingCount: number; successRatePct: number } | null = null;
+  swingLoading = false;
+  swingError: string | null = null;
 
   constructor(private apiService: ApiService) {}
 
@@ -621,6 +872,17 @@ export class SuggestedTradesComponent implements OnInit {
     this.loadSuggestions(clientId);
     this.loadHistory(clientId);
     this.loadSuccessRate(clientId);
+    this.loadSwingSuggestions(clientId);
+    this.loadSwingHistory(clientId);
+    this.loadSwingSuccessRate(clientId);
+  }
+
+  refreshSwing(): void {
+    const clientId = parseInt(localStorage.getItem('clientId') || '0', 10);
+    if (!clientId) return;
+    this.loadSwingSuggestions(clientId);
+    this.loadSwingHistory(clientId);
+    this.loadSwingSuccessRate(clientId);
   }
 
   private loadSuggestions(clientId: number): void {
@@ -647,6 +909,32 @@ export class SuggestedTradesComponent implements OnInit {
     this.apiService.getSuggestedTradeSuccessRate(clientId).subscribe({
       next: (data) => { this.successRate = data; },
       error: () => { /* non-critical – silently ignore */ }
+    });
+  }
+
+  private loadSwingSuggestions(clientId: number): void {
+    this.swingLoading = true;
+    this.swingError = null;
+    this.apiService.getSwingTradeSuggestions(clientId).subscribe({
+      next: (data) => { this.swingSuggestions = data; this.swingLoading = false; },
+      error: (err) => {
+        this.swingError = 'Failed to load swing suggestions: ' + (err.error?.message || err.message || 'Unknown error');
+        this.swingLoading = false;
+      }
+    });
+  }
+
+  private loadSwingHistory(clientId: number): void {
+    this.apiService.getSwingTradeHistory(clientId).subscribe({
+      next: (data) => { this.swingHistory = data; },
+      error: () => { /* non-critical */ }
+    });
+  }
+
+  private loadSwingSuccessRate(clientId: number): void {
+    this.apiService.getSwingTradeSuccessRate(clientId).subscribe({
+      next: (data) => { this.swingSuccessRate = data; },
+      error: () => { /* non-critical */ }
     });
   }
 

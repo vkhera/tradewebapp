@@ -1,5 +1,7 @@
 package com.example.stockbrokerage.client;
 
+import com.example.stockbrokerage.dto.DailyBar;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -30,4 +32,12 @@ public interface YahooFinanceClient {
      * Prices are ordered oldest → newest.
      */
     List<BigDecimal> getHistoricalPrices(String symbol);
+
+    /**
+     * Fetch daily OHLCV bars for the given ticker symbol covering approximately
+     * the past {@code days} calendar days (up to 6 months).
+     * Returns an empty list when data is unavailable.
+     * Bars are ordered oldest → newest.
+     */
+    List<DailyBar> getDailyBars(String symbol, int days);
 }
