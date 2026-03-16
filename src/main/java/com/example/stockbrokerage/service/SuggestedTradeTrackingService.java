@@ -3,6 +3,7 @@ package com.example.stockbrokerage.service;
 import com.example.stockbrokerage.dto.SuggestedTradeHistoryResponse;
 import com.example.stockbrokerage.dto.SuggestedTradeResponse;
 import com.example.stockbrokerage.dto.TradeSuccessRateResponse;
+import com.example.stockbrokerage.entity.JobExecutionRecord;
 import com.example.stockbrokerage.entity.SuggestedTradeRecord;
 import com.example.stockbrokerage.entity.SuggestedTradeRecord.TradeOutcomeStatus;
 import com.example.stockbrokerage.repository.SuggestedTradeRecordRepository;
@@ -12,12 +13,16 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.stockbrokerage.dto.DailyBar;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Persists generated trade suggestions and performs a daily outcome check.
@@ -48,6 +53,7 @@ public class SuggestedTradeTrackingService {
 
     private final SuggestedTradeRecordRepository repository;
     private final StockPriceService stockPriceService;
+    private final JobTrackerService jobTracker;
 
     // ──────────────────────────────────────────────────────────────────────────
     // Persistence
@@ -99,14 +105,32 @@ public class SuggestedTradeTrackingService {
 
     /**
      * Returns all suggestion records for the given client from the last {@value #HISTORY_DAYS} days,
-     * newest first.
+     * newest first. Each record is enriched with the live current market price.
      */
     public List<SuggestedTradeHistoryResponse> getRecentHistory(Long clientId) {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(HISTORY_DAYS);
-        return repository
-                .findByClientIdAndSuggestedDateAfterOrderBySuggestedDateDesc(clientId, cutoff)
-                .stream()
-                .map(this::toHistoryResponse)
+        List<SuggestedTradeRecord> records = repository
+                .findByClientIdAndSuggestedDateAfterOrderBySuggestedDateDesc(clientId, cutoff);
+
+        // Pre-fetch prices for unique symbols — the Yahoo Finance client caches by symbol
+        // so repeated calls for the same symbol within 5 minutes hit the in-memory cache.
+        Map<String, BigDecimal> priceMap = new java.util.HashMap<>();
+        records.stream()
+                .map(SuggestedTradeRecord::getSymbol)
+                .distinct()
+                .forEach(sym -> {
+                    try {
+                        BigDecimal price = stockPriceService.getCurrentPrice(sym);
+                        if (price != null && price.compareTo(BigDecimal.ZERO) > 0) {
+                            priceMap.put(sym, price);
+                        }
+                    } catch (Exception e) {
+                        log.debug("Could not fetch current price for {} in history: {}", sym, e.getMessage());
+                    }
+                });
+
+        return records.stream()
+                .map(r -> toHistoryResponse(r, priceMap.get(r.getSymbol())))
                 .toList();
     }
 
@@ -144,17 +168,32 @@ public class SuggestedTradeTrackingService {
     // Daily scheduler
     // ──────────────────────────────────────────────────────────────────────────
 
+    public static final String JOB_NAME = "TRADE_SUGGESTION_CHECK";
+
     /**
      * Runs every day at 06:00 (server local time).
      * Checks all PENDING suggestions from the last {@value #SCHEDULER_LOOKBACK_DAYS} days.
      * <ul>
-     *   <li>If the current price ≤ {@code suggestedBuyBackPrice} → mark SUCCESS.</li>
+     *   <li>If any historical daily LOW ≤ {@code suggestedBuyBackPrice} → mark SUCCESS.</li>
+     *   <li>If the current live price ≤ target → mark SUCCESS.</li>
      *   <li>If the suggestion is older than {@value #EXPIRY_DAYS} days → mark FAILED.</li>
      * </ul>
      */
     @Scheduled(cron = "0 0 6 * * *")
     @Transactional
     public void checkPendingSuggestions() {
+        JobExecutionRecord job = jobTracker.startJob(JOB_NAME, LocalDateTime.now());
+        try {
+            runPendingCheck();
+            jobTracker.completeJob(job);
+        } catch (Exception e) {
+            jobTracker.failJob(job, e.getMessage());
+            throw e;
+        }
+    }
+
+    /** Core evaluation logic, extracted so it can be called by catch-up on startup. */
+    public void runPendingCheck() {
         LocalDateTime lookback = LocalDateTime.now().minusDays(SCHEDULER_LOOKBACK_DAYS);
         List<SuggestedTradeRecord> pending =
                 repository.findByStatusAndSuggestedDateAfter(TradeOutcomeStatus.PENDING, lookback);
@@ -173,15 +212,43 @@ public class SuggestedTradeTrackingService {
     }
 
     private void evaluateRecord(SuggestedTradeRecord record, LocalDateTime expiryThreshold) {
-        BigDecimal currentPrice = stockPriceService.getCurrentPrice(record.getSymbol());
-
-        // For WATCH suggestions, the buy-back target is optional.
-        // We still track if the price dropped to the target level.
         BigDecimal target = record.getSuggestedBuyBackPrice();
 
-        if (currentPrice != null && target != null
+        // For WATCH suggestions without a buy-back target, only apply expiry.
+        if (target == null) {
+            if (record.getSuggestedDate().isBefore(expiryThreshold)) {
+                record.setStatus(TradeOutcomeStatus.FAILED);
+                record.setResolvedDate(LocalDateTime.now());
+                repository.save(record);
+                log.info("Suggestion FAILED (expired, no target): id={} symbol={} suggestedDate={}",
+                        record.getId(), record.getSymbol(), record.getSuggestedDate());
+            }
+            return;
+        }
+
+        // Check historical daily LOW prices for every trading day since the suggestion.
+        // This catches cases where the target was hit intraday but the price rebounded
+        // before the next 06:00 scheduler run.
+        LocalDate suggestionDate = record.getSuggestedDate().toLocalDate();
+        int daysSinceSuggestion = (int) ChronoUnit.DAYS.between(suggestionDate, LocalDate.now()) + 2;
+        List<DailyBar> bars = stockPriceService.getDailyBars(record.getSymbol(), daysSinceSuggestion);
+        boolean targetHitHistorically = bars.stream()
+                .filter(b -> !b.date().isBefore(suggestionDate))
+                .anyMatch(b -> b.low() != null && b.low().compareTo(target) <= 0);
+
+        if (targetHitHistorically) {
+            record.setStatus(TradeOutcomeStatus.SUCCESS);
+            record.setResolvedDate(LocalDateTime.now());
+            repository.save(record);
+            log.info("Suggestion SUCCESS (historical low hit): id={} symbol={} target={}",
+                    record.getId(), record.getSymbol(), target);
+            return;
+        }
+
+        // Also check the current live price to catch today's intraday movement.
+        BigDecimal currentPrice = stockPriceService.getCurrentPrice(record.getSymbol());
+        if (currentPrice != null && currentPrice.compareTo(BigDecimal.ZERO) > 0
                 && currentPrice.compareTo(target) <= 0) {
-            // Target price was hit
             record.setStatus(TradeOutcomeStatus.SUCCESS);
             record.setResolvedDate(LocalDateTime.now());
             repository.save(record);
@@ -191,7 +258,7 @@ public class SuggestedTradeTrackingService {
         }
 
         if (record.getSuggestedDate().isBefore(expiryThreshold)) {
-            // Older than 7 days and target not hit
+            // Older than 7 days and target never hit
             record.setStatus(TradeOutcomeStatus.FAILED);
             record.setResolvedDate(LocalDateTime.now());
             repository.save(record);
@@ -205,7 +272,7 @@ public class SuggestedTradeTrackingService {
     // Mapper
     // ──────────────────────────────────────────────────────────────────────────
 
-    private SuggestedTradeHistoryResponse toHistoryResponse(SuggestedTradeRecord r) {
+    private SuggestedTradeHistoryResponse toHistoryResponse(SuggestedTradeRecord r, BigDecimal currentMarketPrice) {
         return SuggestedTradeHistoryResponse.builder()
                 .id(r.getId())
                 .clientId(r.getClientId())
@@ -223,6 +290,7 @@ public class SuggestedTradeTrackingService {
                 .reasoning(r.getReasoning())
                 .status(r.getStatus())
                 .resolvedDate(r.getResolvedDate())
+                .currentMarketPrice(currentMarketPrice)
                 .build();
     }
 }

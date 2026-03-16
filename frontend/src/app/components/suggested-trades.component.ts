@@ -23,6 +23,7 @@ interface SuggestedTradeHistory {
   suggestedDate: string;
   action: string;
   currentPriceAtSuggestion: number;
+  currentMarketPrice: number | null;
   suggestedSellPrice: number | null;
   suggestedBuyBackPrice: number | null;
   expectedChangePct: number;
@@ -267,6 +268,7 @@ interface SuccessRate {
               <th>Symbol</th>
               <th>Action</th>
               <th>Price at Suggestion</th>
+              <th>Current Price</th>
               <th>Target (Buy-Back)</th>
               <th>Expected Δ%</th>
               <th>Confidence</th>
@@ -284,6 +286,14 @@ interface SuccessRate {
                 </span>
               </td>
               <td>\${{ h.currentPriceAtSuggestion | number:'1.2-2' }}</td>
+              <td>
+                <span *ngIf="h.currentMarketPrice !== null && h.currentMarketPrice !== undefined"
+                      [class.positive]="h.currentMarketPrice < h.currentPriceAtSuggestion"
+                      [class.negative]="h.currentMarketPrice > h.currentPriceAtSuggestion">
+                  \${{ h.currentMarketPrice | number:'1.2-2' }}
+                </span>
+                <span *ngIf="h.currentMarketPrice === null || h.currentMarketPrice === undefined" class="muted">—</span>
+              </td>
               <td>
                 <span *ngIf="h.suggestedBuyBackPrice">\${{ h.suggestedBuyBackPrice | number:'1.2-2' }}</span>
                 <span *ngIf="!h.suggestedBuyBackPrice" class="muted">—</span>

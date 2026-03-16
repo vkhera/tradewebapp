@@ -1,5 +1,6 @@
 package com.example.stockbrokerage.service;
 
+import com.example.stockbrokerage.entity.JobExecutionRecord;
 import com.example.stockbrokerage.repository.StockPriceCacheRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,9 @@ public class DataSyncBatchService {
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final StockPriceCacheRepository stockPriceCacheRepository;
+    private final JobTrackerService jobTracker;
+
+    public static final String JOB_NAME = "DATA_SYNC";
 
     /**
      * Runs every night at 2:00 AM Eastern time.
@@ -45,6 +49,18 @@ public class DataSyncBatchService {
      */
     @Scheduled(cron = "0 0 2 * * *", zone = "America/New_York")
     public void syncPriceDataToDatabase() {
+        JobExecutionRecord job = jobTracker.startJob(JOB_NAME, LocalDateTime.now());
+        try {
+            runSync();
+            jobTracker.completeJob(job);
+        } catch (Exception e) {
+            jobTracker.failJob(job, e.getMessage());
+            throw e;
+        }
+    }
+
+    /** Core sync logic, extracted so it can be called by catch-up on startup. */
+    public void runSync() {
         log.info("=== Starting nightly price-data sync to PostgreSQL ===");
 
         Path dir = Paths.get(STOCK_PREDICTIONS_DIR);

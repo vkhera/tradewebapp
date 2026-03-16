@@ -1,11 +1,13 @@
 package com.example.stockbrokerage.service;
 
 import com.example.stockbrokerage.client.YahooFinanceClient;
+import com.example.stockbrokerage.dto.DailyBar;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -33,5 +35,12 @@ public class StockPriceService {
      */
     public Map<String, Object> getQuote(String symbol) {
         return yahooFinanceClient.getQuote(symbol);
+    }
+
+    /**
+     * Fetch daily OHLCV bars covering approximately the past {@code days} calendar days.
+     */
+    public List<DailyBar> getDailyBars(String symbol, int days) {
+        return yahooFinanceClient.getDailyBars(symbol, days);
     }
 }

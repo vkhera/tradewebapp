@@ -2,6 +2,7 @@ package com.example.stockbrokerage.service;
 
 import com.example.stockbrokerage.dto.SwingTradeSuggestionResponse;
 import com.example.stockbrokerage.dto.SwingTradeSuccessRateResponse;
+import com.example.stockbrokerage.entity.JobExecutionRecord;
 import com.example.stockbrokerage.entity.SwingStrategyWeight;
 import com.example.stockbrokerage.entity.SwingTradePrediction;
 import com.example.stockbrokerage.entity.SwingTradePrediction.SwingOutcomeStatus;
@@ -53,6 +54,7 @@ public class SwingTradeTrackingService {
     private final SwingTradePredictionRepository swingRepository;
     private final SwingStrategyWeightRepository  weightRepository;
     private final StockPriceService              stockPriceService;
+    private final JobTrackerService              jobTracker;
 
     // ──────────────────────────────────────────────────────────────────────────
     // Persistence
@@ -144,9 +146,23 @@ public class SwingTradeTrackingService {
     // Daily scheduler (06:30 ET)
     // ──────────────────────────────────────────────────────────────────────────
 
+    public static final String JOB_NAME = "SWING_TRADE_CHECK";
+
     @Scheduled(cron = "0 30 6 * * *")
     @Transactional
     public void evaluatePendingSwingTrades() {
+        JobExecutionRecord job = jobTracker.startJob(JOB_NAME, LocalDateTime.now());
+        try {
+            runPendingEvaluation();
+            jobTracker.completeJob(job);
+        } catch (Exception e) {
+            jobTracker.failJob(job, e.getMessage());
+            throw e;
+        }
+    }
+
+    /** Core evaluation logic, extracted so it can be called by catch-up on startup. */
+    public void runPendingEvaluation() {
         LocalDateTime lookback = LocalDateTime.now().minusDays(SCHEDULER_LOOKBACK);
         List<SwingTradePrediction> pending =
                 swingRepository.findByStatusAndSuggestedDateAfter(SwingOutcomeStatus.PENDING, lookback);

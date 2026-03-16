@@ -1,8 +1,10 @@
 package com.example.stockbrokerage.service;
 
+import com.example.stockbrokerage.dto.DailyBar;
 import com.example.stockbrokerage.dto.SuggestedTradeHistoryResponse;
 import com.example.stockbrokerage.dto.SuggestedTradeResponse;
 import com.example.stockbrokerage.dto.TradeSuccessRateResponse;
+import com.example.stockbrokerage.entity.JobExecutionRecord;
 import com.example.stockbrokerage.entity.SuggestedTradeRecord;
 import com.example.stockbrokerage.entity.SuggestedTradeRecord.TradeOutcomeStatus;
 import com.example.stockbrokerage.repository.SuggestedTradeRecordRepository;
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -28,12 +31,17 @@ class SuggestedTradeTrackingServiceTest {
     private SuggestedTradeTrackingService service;
     private SuggestedTradeRecordRepository repository;
     private StockPriceService stockPriceService;
+    private JobTrackerService jobTracker;
 
     @BeforeEach
     void setUp() {
-        repository      = mock(SuggestedTradeRecordRepository.class);
+        repository        = mock(SuggestedTradeRecordRepository.class);
         stockPriceService = mock(StockPriceService.class);
-        service = new SuggestedTradeTrackingService(repository, stockPriceService);
+        jobTracker        = mock(JobTrackerService.class);
+        // Make startJob return a non-null dummy record so completeJob/failJob don't NPE
+        when(jobTracker.startJob(anyString(), any()))
+                .thenReturn(new JobExecutionRecord());
+        service = new SuggestedTradeTrackingService(repository, stockPriceService, jobTracker);
     }
 
     // ── saveSuggestions ───────────────────────────────────────────────────────
@@ -88,12 +96,14 @@ class SuggestedTradeTrackingServiceTest {
 
         when(repository.findByClientIdAndSuggestedDateAfterOrderBySuggestedDateDesc(eq(1L), any()))
                 .thenReturn(List.of(record));
+        when(stockPriceService.getCurrentPrice("NVDA")).thenReturn(BigDecimal.valueOf(501.23));
 
         List<SuggestedTradeHistoryResponse> history = service.getRecentHistory(1L);
 
         assertThat(history).hasSize(1);
         assertThat(history.get(0).getSymbol()).isEqualTo("NVDA");
         assertThat(history.get(0).getStatus()).isEqualTo(TradeOutcomeStatus.SUCCESS);
+        assertThat(history.get(0).getCurrentMarketPrice()).isEqualByComparingTo(BigDecimal.valueOf(501.23));
     }
 
     @Test
@@ -148,8 +158,41 @@ class SuggestedTradeTrackingServiceTest {
 
         when(repository.findByStatusAndSuggestedDateAfter(eq(TradeOutcomeStatus.PENDING), any()))
                 .thenReturn(List.of(record));
-        // Current price dropped to/below the target
+        // No historical low hit — daily bars all above target
+        when(stockPriceService.getDailyBars(eq("AAPL"), anyInt()))
+                .thenReturn(List.of(new DailyBar(LocalDate.now().minusDays(1),
+                        BigDecimal.valueOf(200), BigDecimal.valueOf(202),
+                        BigDecimal.valueOf(195), BigDecimal.valueOf(197), 1_000_000L)));
+        // Current (live) price dropped to/below the target
         when(stockPriceService.getCurrentPrice("AAPL")).thenReturn(BigDecimal.valueOf(188));
+
+        service.checkPendingSuggestions();
+
+        verify(repository).save(argThat(r -> r.getStatus() == TradeOutcomeStatus.SUCCESS));
+    }
+
+    @Test
+    void scheduler_marksRecordSuccessWhenHistoricalLowHitTarget() {
+        // The bug scenario: target was hit on a prior day but price has since rebounded.
+        // Old logic missed this; new logic checks daily LOW prices.
+        SuggestedTradeRecord record = buildRecord(1L, "BRZU", TradeOutcomeStatus.PENDING,
+                LocalDateTime.now().minusDays(4));
+        record.setSuggestedBuyBackPrice(BigDecimal.valueOf(101.60));
+
+        when(repository.findByStatusAndSuggestedDateAfter(eq(TradeOutcomeStatus.PENDING), any()))
+                .thenReturn(List.of(record));
+        // Daily bar on day 2 after suggestion has a low of 96 — below the 101.60 target
+        when(stockPriceService.getDailyBars(eq("BRZU"), anyInt()))
+                .thenReturn(List.of(
+                        new DailyBar(LocalDate.now().minusDays(3),
+                                BigDecimal.valueOf(108), BigDecimal.valueOf(110),
+                                BigDecimal.valueOf(96), BigDecimal.valueOf(98), 2_000_000L),
+                        new DailyBar(LocalDate.now().minusDays(1),
+                                BigDecimal.valueOf(104), BigDecimal.valueOf(106),
+                                BigDecimal.valueOf(102), BigDecimal.valueOf(105), 1_500_000L)
+                ));
+        // Current price has rebounded above target — old logic would NOT have caught this
+        when(stockPriceService.getCurrentPrice("BRZU")).thenReturn(BigDecimal.valueOf(108));
 
         service.checkPendingSuggestions();
 
@@ -164,7 +207,11 @@ class SuggestedTradeTrackingServiceTest {
 
         when(repository.findByStatusAndSuggestedDateAfter(eq(TradeOutcomeStatus.PENDING), any()))
                 .thenReturn(List.of(record));
-        // Current price is still above the target
+        // Historical lows all above target and current price also above target
+        when(stockPriceService.getDailyBars(eq("NVDA"), anyInt()))
+                .thenReturn(List.of(new DailyBar(LocalDate.now().minusDays(2),
+                        BigDecimal.valueOf(460), BigDecimal.valueOf(470),
+                        BigDecimal.valueOf(445), BigDecimal.valueOf(450), 800_000L)));
         when(stockPriceService.getCurrentPrice("NVDA")).thenReturn(BigDecimal.valueOf(450));
 
         service.checkPendingSuggestions();
@@ -180,7 +227,11 @@ class SuggestedTradeTrackingServiceTest {
 
         when(repository.findByStatusAndSuggestedDateAfter(eq(TradeOutcomeStatus.PENDING), any()))
                 .thenReturn(List.of(record));
-        // Price has not dropped to target yet
+        // Historical lows and current price all above target
+        when(stockPriceService.getDailyBars(eq("MSFT"), anyInt()))
+                .thenReturn(List.of(new DailyBar(LocalDate.now().minusDays(1),
+                        BigDecimal.valueOf(360), BigDecimal.valueOf(365),
+                        BigDecimal.valueOf(345), BigDecimal.valueOf(350), 500_000L)));
         when(stockPriceService.getCurrentPrice("MSFT")).thenReturn(BigDecimal.valueOf(350));
 
         service.checkPendingSuggestions();
@@ -197,13 +248,14 @@ class SuggestedTradeTrackingServiceTest {
 
         when(repository.findByStatusAndSuggestedDateAfter(eq(TradeOutcomeStatus.PENDING), any()))
                 .thenReturn(List.of(record));
-        when(stockPriceService.getCurrentPrice("AMZN")).thenReturn(BigDecimal.valueOf(180));
+        // No getDailyBars or getCurrentPrice call expected when target is null
 
         service.checkPendingSuggestions();
 
-        // No target to compare → still expires by date (8 days > 7 day expiry)
-        // However since target is null, no SUCCESS path — only FAILED by age applies
+        // No target to compare → expires by age (9 days > 7 day expiry)
         verify(repository).save(argThat(r -> r.getStatus() == TradeOutcomeStatus.FAILED));
+        verify(stockPriceService, never()).getDailyBars(anyString(), anyInt());
+        verify(stockPriceService, never()).getCurrentPrice(anyString());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

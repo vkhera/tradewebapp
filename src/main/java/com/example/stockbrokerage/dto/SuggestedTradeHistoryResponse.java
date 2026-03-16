@@ -34,4 +34,7 @@ public class SuggestedTradeHistoryResponse {
     private String reasoning;
     private TradeOutcomeStatus status;
     private LocalDateTime resolvedDate;
+
+    /** Live market price fetched at the time the history endpoint was called. */
+    private BigDecimal currentMarketPrice;
 }
