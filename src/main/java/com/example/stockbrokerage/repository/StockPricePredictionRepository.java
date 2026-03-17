@@ -33,4 +33,10 @@ public interface StockPricePredictionRepository extends JpaRepository<StockPrice
 
     @Query("SELECT DISTINCT p.symbol FROM StockPricePrediction p")
     List<String> findAllTrackedSymbols();
+
+    /** All resolved predictions whose targetHour falls within the given window (for daily scoring). */
+    @Query("SELECT p FROM StockPricePrediction p WHERE p.actualPrice IS NOT NULL " +
+           "AND p.targetHour >= :from AND p.targetHour < :to")
+    List<StockPricePrediction> findResolvedPredictionsBetween(
+            @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

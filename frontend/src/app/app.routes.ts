@@ -3,6 +3,7 @@ import { TradeComponent } from './components/trade.component';
 import { AdminClientsComponent } from './components/admin-clients.component';
 import { AdminRulesComponent } from './components/admin-rules.component';
 import { AdminClientHoldingsComponent } from './components/admin-client-holdings.component';
+import { AdminJobsComponent } from './components/admin-jobs.component';
 import { LoginComponent } from './components/login.component';
 import { PortfolioComponent } from './components/portfolio.component';
 import { FundAccountComponent } from './components/fund-account.component';
@@ -27,5 +28,6 @@ export const routes: Routes = [
   { path: 'admin/clients',     component: AdminClientsComponent,          canActivate: [adminGuard] },
   { path: 'admin/rules',       component: AdminRulesComponent,            canActivate: [adminGuard] },
   { path: 'admin/holdings',    component: AdminClientHoldingsComponent,   canActivate: [adminGuard] },
+  { path: 'admin/jobs',        component: AdminJobsComponent,             canActivate: [adminGuard] },
   { path: '**', redirectTo: '/login' }
 ];

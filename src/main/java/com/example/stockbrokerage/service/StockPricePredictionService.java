@@ -129,7 +129,8 @@ public class StockPricePredictionService {
         BigDecimal currentPrice = history.getLast();
         Map<String, Double> weights = loadWeights(symbol);
 
-        LocalDateTime baseHour = LocalDateTime.now(clock).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime baseHour = LocalDateTime.now(clock.withZone(EASTERN))
+            .withMinute(0).withSecond(0).withNano(0);
 
         // ── Market-index adjustment (computed once per prediction run) ─────────
         // The adjustment factor is a signed decimal (e.g. 0.005 = +0.5%).
@@ -180,7 +181,7 @@ public class StockPricePredictionService {
             symbol, currentPrice, baseHour,
             hourlyPredictions, new LinkedHashMap<>(weights),
             averageConfidence(hourlyPredictions), false,
-            LocalDateTime.now(clock), List.of(), indexInfluences
+            LocalDateTime.now(clock.withZone(EASTERN)), List.of(), indexInfluences
         );
 
         log.info("Completed predictions for {} – current price: {}, 1h prediction: {}",
@@ -196,7 +197,8 @@ public class StockPricePredictionService {
         log.info("Resolving past predictions and updating weights for {}", symbol);
 
         BigDecimal currentPrice = marketDataService.getCurrentPrice(symbol);
-        LocalDateTime now = LocalDateTime.now(clock).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime now = LocalDateTime.now(clock.withZone(EASTERN))
+            .withMinute(0).withSecond(0).withNano(0);
 
         // Find DB predictions whose target hour has passed but actual price not filled
         List<StockPricePrediction> unresolved = repository.findUnresolvedPredictions(symbol, now);
@@ -465,17 +467,18 @@ public class StockPricePredictionService {
                                                Map<String, Double> weights) {
         for (Map.Entry<String, BigDecimal> e : breakdown.entrySet()) {
             String technique = e.getKey();
-            // Avoid duplicate rows for same symbol+technique+targetHour
-            Optional<StockPricePrediction> existing =
-                repository.findBySymbolAndTechniqueAndTargetHour(symbol, technique, targetHour);
-            if (existing.isPresent()) continue;
+            StockPricePrediction rec = repository
+                .findBySymbolAndTechniqueAndTargetHour(symbol, technique, targetHour)
+                .orElseGet(StockPricePrediction::new);
 
-            StockPricePrediction rec = new StockPricePrediction();
             rec.setSymbol(symbol);
             rec.setTechnique(technique);
             rec.setPredictionMadeAt(madeAt);
             rec.setTargetHour(targetHour);
             rec.setPredictedPrice(e.getValue());
+            rec.setActualPrice(null);
+            rec.setAbsoluteError(null);
+            rec.setPercentageError(null);
             repository.save(rec);
         }
     }
@@ -485,12 +488,12 @@ public class StockPricePredictionService {
     private static final ZoneId EASTERN = ZoneId.of("America/New_York");
 
     private StockPricePredictionResponse loadLatestFromDb(String symbol) {
-        LocalDateTime cutoff     = LocalDateTime.now(clock).minusMinutes(50);
-        LocalDateTime nowHour    = LocalDateTime.now(clock).withMinute(0).withSecond(0).withNano(0);
-        // Use Eastern market hours converted to server UTC for DB queries
+        LocalDateTime cutoff     = LocalDateTime.now(clock.withZone(EASTERN)).minusMinutes(50);
+        LocalDateTime nowHour    = LocalDateTime.now(clock.withZone(EASTERN))
+            .withMinute(0).withSecond(0).withNano(0);
         LocalDate todayET        = LocalDate.now(clock.withZone(EASTERN));
-        LocalDateTime todayOpen  = todayET.atTime(9, 30).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
-        LocalDateTime todayClose = todayET.atTime(16, 0).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
+        LocalDateTime todayOpen  = todayET.atTime(9, 0);
+        LocalDateTime todayClose = todayET.atTime(16, 0);
 
         // Fetch all of today's market-hours predictions (past + future for today)
         List<StockPricePrediction> recs =
@@ -554,8 +557,8 @@ public class StockPricePredictionService {
      */
     private List<HourlyPricePrediction> loadPreviousDayFromDb(String symbol) {
         LocalDate prevDay      = getPreviousBusinessDay(LocalDate.now(clock.withZone(EASTERN)));
-        LocalDateTime prevOpen  = prevDay.atTime(9, 30).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
-        LocalDateTime prevClose = prevDay.atTime(16, 0).atZone(EASTERN).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
+        LocalDateTime prevOpen  = prevDay.atTime(9, 0);
+        LocalDateTime prevClose = prevDay.atTime(16, 0);
 
         List<StockPricePrediction> recs =
             repository.findBySymbolAndTargetHourBetweenOrderByTargetHourAsc(symbol, prevOpen, prevClose);
@@ -602,8 +605,9 @@ public class StockPricePredictionService {
 
     private StockPricePredictionResponse buildEmptyResponse(String symbol) {
         BigDecimal cur = marketDataService.getCurrentPrice(symbol);
+        LocalDateTime now = LocalDateTime.now(clock.withZone(EASTERN));
         return new StockPricePredictionResponse(
-            symbol, cur, LocalDateTime.now(), List.of(), Map.of(), 0.0, false, LocalDateTime.now(), List.of(), List.of());
+            symbol, cur, now, List.of(), Map.of(), 0.0, false, now, List.of(), List.of());
     }
 
     private void ensureDataDir() {

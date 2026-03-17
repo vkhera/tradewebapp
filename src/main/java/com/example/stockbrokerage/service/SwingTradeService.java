@@ -1,5 +1,6 @@
 package com.example.stockbrokerage.service;
 
+import com.example.stockbrokerage.dto.OptionsSnapshot;
 import com.example.stockbrokerage.dto.SwingTradeSuggestionResponse;
 import com.example.stockbrokerage.entity.Portfolio;
 import com.example.stockbrokerage.entity.SwingStrategyWeight;
@@ -56,6 +57,7 @@ public class SwingTradeService {
     private final SwingTradeStrategyService  strategyService;
     private final SwingStrategyWeightRepository weightRepository;
     private final StockPriceService          stockPriceService;
+    private final OptionsDataService         optionsDataService;
 
     // ──────────────────────────────────────────────────────────────────────────
     // Public API
@@ -165,8 +167,54 @@ public class SwingTradeService {
                 : String.join(", ", strongStrategies);
 
         String reasoning = buildReasoning(symbol, bullish, netSignal, avgReturn, holdDays, signals);
-        String strategySignalsJson = buildStrategySignalsJson(signals);
 
+        // ── Options market overlay ──────────────────────────────────────────────
+        // Adjusts stop-loss width (IV), confidence (PCR alignment), target (max pain)
+        // and appends a brief options context to the reasoning string.
+        OptionsSnapshot opts = optionsDataService.getOptionsSnapshot(symbol);
+        if (opts.dataAvailable()) {
+            double iv         = opts.atmImpliedVolatility();
+            double pcr        = opts.putCallRatioOI();
+            double maxPainStrike = opts.maxPain();
+
+            // 1. Dynamic stop-loss: widen proportionally when IV exceeds a 30% baseline.
+            //    e.g. IV=50% → multiplier=1.4; IV=70% → multiplier=1.8.
+            if (iv > 0.30) {
+                double ivMultiplier = 1.0 + (iv - 0.30) * 2.0;
+                stopLossVal = bullish
+                        ? price * (1.0 - STOP_LOSS_HOLD_PCT * ivMultiplier)
+                        : targetPriceVal * (1.0 + STOP_LOSS_SELL_PCT * ivMultiplier);
+            }
+
+            // 2. Confidence boost when PCR contrarian signal aligns with the technical direction.
+            //    PCR>1.5 (extreme fear) is contrarian bullish; PCR<0.7 (greed) is contrarian bearish.
+            if ((bullish && opts.isExtremeFear()) || (!bullish && opts.isExtremeGreed())) {
+                confidence = Math.min(95, confidence + 8);
+            }
+
+            // 3. Max pain target anchor for short-duration suggestions (≤5 days).
+            //    If max pain sits between current price and the computed target, snap
+            //    the target to max pain — it acts as a nearer-term price magnet.
+            if (holdDays <= 5 && maxPainStrike > 0) {
+                if (bullish && maxPainStrike > price && maxPainStrike < targetPriceVal) {
+                    targetPriceVal = maxPainStrike;
+                } else if (!bullish && maxPainStrike < price && maxPainStrike > targetPriceVal) {
+                    targetPriceVal = maxPainStrike;
+                }
+            }
+
+            // 4. Append options context to reasoning.
+            String pcrLabel = opts.isExtremeFear()  ? "extreme fear"
+                            : opts.isExtremeGreed() ? "extreme greed"
+                            :                          "neutral";
+            String ivLabel  = opts.isExtremeIV() ? "extreme" : opts.isHighIV() ? "elevated" : "normal";
+            reasoning += " Options market: IV=%.0f%% (%s), PCR=%.2f (%s)%s.".formatted(
+                    iv * 100, ivLabel, pcr, pcrLabel,
+                    maxPainStrike > 0 ? "; MaxPain=$%.2f".formatted(maxPainStrike) : "");
+        }
+        // ── End options overlay ─────────────────────────────────────────────────
+
+        String strategySignalsJson = buildStrategySignalsJson(signals);
         LocalDateTime suggestedDate = ZonedDateTime.now(EST).toLocalDateTime();
 
         return SwingTradeSuggestionResponse.builder()

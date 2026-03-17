@@ -275,4 +275,21 @@ export class ApiService {
   getSwingTradeSuccessRate(clientId: number): Observable<any> {
     return this.http.get<any>(`${this.baseUrl}/swing-trades/${clientId}/success-rate`, this.getHttpOptions());
   }
+
+  // Admin Jobs API
+  getJobStatuses(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.baseUrl}/admin/jobs`, this.getHttpOptions());
+  }
+
+  triggerJob(jobName: string): Observable<any> {
+    return this.http.post<any>(`${this.baseUrl}/admin/jobs/${jobName}/trigger`, {}, this.getHttpOptions());
+  }
+
+  getPredictionScores(): Observable<any> {
+    return this.http.get<any>(`${this.baseUrl}/admin/jobs/prediction-scores`, this.getHttpOptions());
+  }
+
+  getWeightChanges(): Observable<any> {
+    return this.http.get<any>(`${this.baseUrl}/admin/jobs/weight-changes`, this.getHttpOptions());
+  }
 }

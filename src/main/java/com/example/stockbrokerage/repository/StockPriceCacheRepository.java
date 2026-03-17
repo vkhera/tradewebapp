@@ -32,4 +32,20 @@ public interface StockPriceCacheRepository extends JpaRepository<StockPriceCache
                    @Param("syncedAt") LocalDateTime syncedAt);
 
     long countBySymbol(String symbol);
+
+    /** Last 5-minute bar for a symbol on a given trading day. */
+    @Query("SELECT s FROM StockPriceCache s WHERE s.symbol = :symbol " +
+           "AND s.barTime >= :dayStart AND s.barTime < :dayEnd " +
+           "ORDER BY s.barTime DESC LIMIT 1")
+    Optional<StockPriceCache> findLastBarOfDay(@Param("symbol") String symbol,
+                                               @Param("dayStart") LocalDateTime dayStart,
+                                               @Param("dayEnd") LocalDateTime dayEnd);
+
+    /** Last 5-minute bar for a symbol *before* a given timestamp (for previous-day close). */
+    @Query("SELECT s FROM StockPriceCache s WHERE s.symbol = :symbol " +
+           "AND s.barTime >= :from AND s.barTime < :to " +
+           "ORDER BY s.barTime DESC LIMIT 1")
+    Optional<StockPriceCache> findLastBarBefore(@Param("symbol") String symbol,
+                                                @Param("from") LocalDateTime from,
+                                                @Param("to") LocalDateTime to);
 }

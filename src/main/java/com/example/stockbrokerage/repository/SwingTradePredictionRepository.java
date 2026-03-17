@@ -26,4 +26,13 @@ public interface SwingTradePredictionRepository extends JpaRepository<SwingTrade
     /** True if an identical suggestion (same client + symbol + day) already exists. */
     boolean existsByClientIdAndSymbolAndSuggestedDateBetween(
             Long clientId, String symbol, LocalDateTime start, LocalDateTime end);
+
+    /** All resolved (non-PENDING) swing predictions whose resolvedDate falls in [from, to). */
+    @org.springframework.data.jpa.repository.Query(
+        "SELECT s FROM SwingTradePrediction s " +
+        "WHERE s.status IN :statuses AND s.resolvedDate >= :from AND s.resolvedDate < :to")
+    List<SwingTradePrediction> findResolvedBetween(
+            @org.springframework.data.repository.query.Param("statuses") List<SwingOutcomeStatus> statuses,
+            @org.springframework.data.repository.query.Param("from") LocalDateTime from,
+            @org.springframework.data.repository.query.Param("to") LocalDateTime to);
 }

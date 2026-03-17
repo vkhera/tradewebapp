@@ -79,5 +79,52 @@ export default function () {
     });
   }
 
+  // ── Swing trade suggestions (includes options-market overlay) ─────────────
+  const swingResponse = http.get(`${baseUrl}/api/swing-trades/suggestions/${clientId}`, clientAuth);
+  check(swingResponse, {
+    'swing trades suggestions status is 200': (r) => r.status === 200,
+    'swing trades response is a JSON array':  (r) => { try { return Array.isArray(JSON.parse(r.body)); } catch { return false; } }
+  });
+
+  // If the client has holdings with sufficient data, validate the response shape
+  const swingBody = (() => { try { return JSON.parse(swingResponse.body); } catch { return []; } })();
+  if (Array.isArray(swingBody) && swingBody.length > 0) {
+    const first = swingBody[0];
+    check(swingResponse, {
+      'swing suggestion has symbol':             () => typeof first.symbol === 'string' && first.symbol.length > 0,
+      'swing suggestion has action':             () => first.action === 'HOLD' || first.action === 'SELL',
+      'swing suggestion has targetPrice':        () => typeof first.targetPrice === 'number' && first.targetPrice > 0,
+      'swing suggestion has stopLoss':           () => typeof first.stopLoss  === 'number'  && first.stopLoss  > 0,
+      'swing suggestion has confidence 0-100':   () => typeof first.confidence === 'number' && first.confidence >= 0 && first.confidence <= 100,
+      'swing suggestion has reasoning text':     () => typeof first.reasoning === 'string'  && first.reasoning.length > 0,
+      'swing suggestion has predictedReturnPct': () => typeof first.predictedReturnPct === 'number',
+      'swing suggestion has holdDaysEstimated':  () => typeof first.holdDaysEstimated === 'number' && first.holdDaysEstimated > 0,
+      'swing confidence within bounds (<=95)':   () => first.confidence <= 95
+    });
+  }
+
+  // ── Swing trade history ──────────────────────────────────────────────────
+  const swingHistoryResponse = http.get(`${baseUrl}/api/swing-trades/${clientId}/history`, clientAuth);
+  check(swingHistoryResponse, {
+    'swing history status is 200':          (r) => r.status === 200,
+    'swing history response is JSON array': (r) => { try { return Array.isArray(JSON.parse(r.body)); } catch { return false; } }
+  });
+
+  // ── Trend analysis endpoint (OPTIONS_SENTIMENT technique now included) ────
+  const trendResponse = http.get(`${baseUrl}/api/trends/last/AAPL`, clientAuth);
+  check(trendResponse, {
+    'trend analysis for AAPL returns 200': (r) => r.status === 200
+  });
+
+  const trendBody = (() => { try { return JSON.parse(trendResponse.body); } catch { return null; } })();
+  if (trendBody !== null) {
+    check(trendResponse, {
+      'trend has overallTrend field':        () => 'overallTrend' in trendBody,
+      'trend overallTrend is valid value':   () => ['UPTREND','DOWNTREND','SIDEWAYS'].includes(trendBody.overallTrend),
+      'trend has techniqueResults map':      () => typeof trendBody.techniqueResults === 'object' && trendBody.techniqueResults !== null,
+      'trend includes Options_Sentiment':    () => 'Options_Sentiment' in (trendBody.techniqueResults ?? {})
+    });
+  }
+
   sleep(1);
 }

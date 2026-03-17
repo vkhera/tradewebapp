@@ -3,7 +3,7 @@ import { ComponentFixture } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { of, throwError } from 'rxjs';
 import { SuggestedTradesComponent } from './suggested-trades.component';
-import { ApiService } from '../services/api.service';
+import { ApiService, Client } from '../services/api.service';
 
 // â”€â”€â”€ Shared test data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -74,6 +74,29 @@ const MOCK_SUCCESS_RATE = {
   successRatePct: 75.0
 };
 
+const MOCK_CLIENTS: Client[] = [
+  {
+    id: 7,
+    clientCode: 'CL-007',
+    name: 'Alice Carter',
+    email: 'alice@example.com',
+    phone: '555-1000',
+    accountBalance: 12000,
+    status: 'ACTIVE',
+    riskLevel: 'MEDIUM'
+  },
+  {
+    id: 9,
+    clientCode: 'CL-009',
+    name: 'Brian Stone',
+    email: 'brian@example.com',
+    phone: '555-1001',
+    accountBalance: 18500,
+    status: 'ACTIVE',
+    riskLevel: 'HIGH'
+  }
+];
+
 // â”€â”€â”€ Suite â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('SuggestedTradesComponent', () => {
@@ -84,15 +107,24 @@ describe('SuggestedTradesComponent', () => {
   beforeEach(async () => {
     // Seed a client ID in localStorage
     localStorage.setItem('clientId', '1');
+    localStorage.setItem('role', 'CLIENT');
 
     apiServiceSpy = jasmine.createSpyObj<ApiService>('ApiService', [
       'getSuggestedTrades',
       'getSuggestedTradeHistory',
-      'getSuggestedTradeSuccessRate'
+      'getSuggestedTradeSuccessRate',
+      'getSwingTradeSuggestions',
+      'getSwingTradeHistory',
+      'getSwingTradeSuccessRate',
+      'getAllClients'
     ]);
     apiServiceSpy.getSuggestedTrades.and.returnValue(of([MOCK_SUGGESTION]));
     apiServiceSpy.getSuggestedTradeHistory.and.returnValue(of(MOCK_HISTORY));
     apiServiceSpy.getSuggestedTradeSuccessRate.and.returnValue(of(MOCK_SUCCESS_RATE));
+    apiServiceSpy.getSwingTradeSuggestions.and.returnValue(of([]));
+    apiServiceSpy.getSwingTradeHistory.and.returnValue(of([]));
+    apiServiceSpy.getSwingTradeSuccessRate.and.returnValue(of(MOCK_SUCCESS_RATE));
+    apiServiceSpy.getAllClients.and.returnValue(of(MOCK_CLIENTS));
 
     await TestBed.configureTestingModule({
       imports: [SuggestedTradesComponent, CommonModule],
@@ -105,6 +137,7 @@ describe('SuggestedTradesComponent', () => {
 
   afterEach(() => {
     localStorage.removeItem('clientId');
+    localStorage.removeItem('role');
   });
 
   // â”€â”€ Creation & initial load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -118,6 +151,9 @@ describe('SuggestedTradesComponent', () => {
     expect(apiServiceSpy.getSuggestedTrades).toHaveBeenCalledWith(1);
     expect(apiServiceSpy.getSuggestedTradeHistory).toHaveBeenCalledWith(1);
     expect(apiServiceSpy.getSuggestedTradeSuccessRate).toHaveBeenCalledWith(1);
+    expect(apiServiceSpy.getSwingTradeSuggestions).toHaveBeenCalledWith(1);
+    expect(apiServiceSpy.getSwingTradeHistory).toHaveBeenCalledWith(1);
+    expect(apiServiceSpy.getSwingTradeSuccessRate).toHaveBeenCalledWith(1);
   });
 
   it('should populate suggestions array after init', () => {
@@ -228,10 +264,38 @@ describe('SuggestedTradesComponent', () => {
   // â”€â”€ Missing client ID â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   it('should display error when clientId is missing from localStorage', () => {
+    localStorage.setItem('role', 'CLIENT');
     localStorage.removeItem('clientId');
     fixture.detectChanges();
     expect(component.error).toBeTruthy();
     expect(apiServiceSpy.getSuggestedTrades).not.toHaveBeenCalled();
+  });
+
+  it('should load the admin client list and default to the first available client', () => {
+    localStorage.setItem('role', 'ADMIN');
+    localStorage.removeItem('clientId');
+
+    fixture.detectChanges();
+
+    expect(apiServiceSpy.getAllClients).toHaveBeenCalled();
+    expect(component.isAdminUser).toBeTrue();
+    expect(component.selectedClientId).toBe(7);
+    expect(apiServiceSpy.getSuggestedTrades).toHaveBeenCalledWith(7);
+    expect(apiServiceSpy.getSuggestedTradeHistory).toHaveBeenCalledWith(7);
+    expect(apiServiceSpy.getSuggestedTradeSuccessRate).toHaveBeenCalledWith(7);
+  });
+
+  it('should reload data when an admin selects a different client', () => {
+    localStorage.setItem('role', 'ADMIN');
+    fixture.detectChanges();
+
+    component.selectedClientId = 9;
+    component.onClientChange();
+
+    expect(apiServiceSpy.getSuggestedTrades).toHaveBeenCalledWith(9);
+    expect(apiServiceSpy.getSuggestedTradeHistory).toHaveBeenCalledWith(9);
+    expect(apiServiceSpy.getSuggestedTradeSuccessRate).toHaveBeenCalledWith(9);
+    expect(apiServiceSpy.getSwingTradeSuggestions).toHaveBeenCalledWith(9);
   });
 
   // â”€â”€ Refresh button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -243,6 +307,7 @@ describe('SuggestedTradesComponent', () => {
     btn.click();
     expect(apiServiceSpy.getSuggestedTrades).toHaveBeenCalledTimes(2);
     expect(apiServiceSpy.getSuggestedTradeHistory).toHaveBeenCalledTimes(2);
+    expect(apiServiceSpy.getSwingTradeSuggestions).toHaveBeenCalledTimes(2);
   });
 
   // â”€â”€ formatDate helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -266,5 +331,8 @@ describe('SuggestedTradesComponent', () => {
     expect(apiServiceSpy.getSuggestedTrades).toHaveBeenCalledTimes(3);
     expect(apiServiceSpy.getSuggestedTradeHistory).toHaveBeenCalledTimes(3);
     expect(apiServiceSpy.getSuggestedTradeSuccessRate).toHaveBeenCalledTimes(3);
+    expect(apiServiceSpy.getSwingTradeSuggestions).toHaveBeenCalledTimes(3);
+    expect(apiServiceSpy.getSwingTradeHistory).toHaveBeenCalledTimes(3);
+    expect(apiServiceSpy.getSwingTradeSuccessRate).toHaveBeenCalledTimes(3);
   });
 });

@@ -1,6 +1,7 @@
 ﻿import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ApiService } from '../services/api.service';
+import { FormsModule } from '@angular/forms';
+import { ApiService, Client } from '../services/api.service';
 
 interface SuggestedTrade {
   symbol: string;
@@ -61,7 +62,7 @@ interface SuccessRate {
 @Component({
   selector: 'app-suggested-trades',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="container">
       <div class="page-header">
@@ -72,6 +73,19 @@ interface SuccessRate {
               AI-powered suggestions based on ATR(14) and 8-hour price predictions.
               Stocks expected to move more than 2% are shown below (up to 5).
             </p>
+            <div *ngIf="isAdminUser" class="client-selector-row">
+              <label for="suggestedTradesClientSelect">Client</label>
+              <select id="suggestedTradesClientSelect"
+                      [(ngModel)]="selectedClientId"
+                      (ngModelChange)="onClientChange()"
+                      [disabled]="clientLoading || clients.length === 0">
+                <option [ngValue]="null">Select client</option>
+                <option *ngFor="let client of clients" [ngValue]="client.id ?? null">
+                  {{ client.name }} ({{ client.clientCode }})
+                </option>
+              </select>
+              <span class="client-selector-hint" *ngIf="clientLoading">Loading clients...</span>
+            </div>
           </div>
           <div *ngIf="successRate" class="success-rate-badge" [class.good]="successRate.successRatePct >= 50" [class.poor]="successRate.successRatePct < 50">
             <div class="rate-value">{{ successRate.successRatePct | number:'1.1-1' }}%</div>
@@ -851,9 +865,40 @@ interface SuccessRate {
       padding: 8px 14px;
       border-radius: 6px;
     }
+
+    .client-selector-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .client-selector-row label {
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .client-selector-row select {
+      min-width: 260px;
+      padding: 8px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .client-selector-hint {
+      font-size: 0.85rem;
+      color: #64748b;
+    }
   `]
 })
 export class SuggestedTradesComponent implements OnInit {
+  clients: Client[] = [];
+  selectedClientId: number | null = null;
+  isAdminUser = false;
+  clientLoading = false;
+
   suggestions: SuggestedTrade[] = [];
   history: SuggestedTradeHistory[] = [];
   successRate: SuccessRate | null = null;
@@ -870,13 +915,21 @@ export class SuggestedTradesComponent implements OnInit {
   constructor(private apiService: ApiService) {}
 
   ngOnInit(): void {
+    this.isAdminUser = this.isAdmin();
+    if (this.isAdminUser) {
+      this.loadClientsForAdmin();
+      return;
+    }
     this.loadAll();
   }
 
   loadAll(): void {
-    const clientId = parseInt(localStorage.getItem('clientId') || '0', 10);
+    const clientId = this.getActiveClientId();
     if (!clientId) {
-      this.error = 'Client ID not found. Please log in again.';
+      this.error = this.isAdminUser
+        ? 'Select a client to view suggested trades.'
+        : 'Client ID not found. Please log in again.';
+      this.clearData();
       return;
     }
     this.loadSuggestions(clientId);
@@ -888,11 +941,64 @@ export class SuggestedTradesComponent implements OnInit {
   }
 
   refreshSwing(): void {
-    const clientId = parseInt(localStorage.getItem('clientId') || '0', 10);
+    const clientId = this.getActiveClientId();
     if (!clientId) return;
     this.loadSwingSuggestions(clientId);
     this.loadSwingHistory(clientId);
     this.loadSwingSuccessRate(clientId);
+  }
+
+  onClientChange(): void {
+    if (!this.isAdminUser) return;
+    this.loadAll();
+  }
+
+  private loadClientsForAdmin(): void {
+    this.clientLoading = true;
+    this.error = null;
+    this.apiService.getAllClients().subscribe({
+      next: (clients) => {
+        this.clients = clients;
+        this.clientLoading = false;
+        if (clients.length === 0) {
+          this.error = 'No clients available.';
+          this.clearData();
+          return;
+        }
+
+        const storedClientId = parseInt(localStorage.getItem('clientId') || '0', 10);
+        const matchingClientId = clients.find(client => client.id === storedClientId)?.id ?? clients[0].id ?? null;
+        this.selectedClientId = matchingClientId;
+        this.loadAll();
+      },
+      error: (err) => {
+        this.clientLoading = false;
+        this.error = 'Failed to load clients: ' + (err.error?.message || err.message || 'Unknown error');
+        this.clearData();
+      }
+    });
+  }
+
+  private isAdmin(): boolean {
+    return typeof window !== 'undefined' && window.localStorage
+      ? localStorage.getItem('role') === 'ADMIN'
+      : false;
+  }
+
+  private getActiveClientId(): number {
+    if (this.isAdminUser) {
+      return this.selectedClientId ?? 0;
+    }
+    return parseInt(localStorage.getItem('clientId') || '0', 10);
+  }
+
+  private clearData(): void {
+    this.suggestions = [];
+    this.history = [];
+    this.successRate = null;
+    this.swingSuggestions = [];
+    this.swingHistory = [];
+    this.swingSuccessRate = null;
   }
 
   private loadSuggestions(clientId: number): void {

@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface JobExecutionRecordRepository extends JpaRepository<JobExecutionRecord, Long> {
@@ -16,7 +18,12 @@ public interface JobExecutionRecordRepository extends JpaRepository<JobExecution
     /**
      * True if there is at least one record for {@code jobName} with {@code status}
      * whose {@code startedAt} is after {@code threshold}.
-     * Used to detect whether a job successfully ran within a given time window.
      */
     boolean existsByJobNameAndStatusAndStartedAtAfter(String jobName, JobStatus status, LocalDateTime threshold);
+
+    /** The most recent execution record for the given job name. */
+    Optional<JobExecutionRecord> findTopByJobNameOrderByStartedAtDesc(String jobName);
+
+    /** The most recent N executions for a job (for history display). */
+    List<JobExecutionRecord> findTop10ByJobNameOrderByStartedAtDesc(String jobName);
 }

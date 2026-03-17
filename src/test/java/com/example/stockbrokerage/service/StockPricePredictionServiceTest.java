@@ -31,15 +31,14 @@ import static org.mockito.Mockito.*;
  * Time-aware unit tests for {@link StockPricePredictionService}.
  *
  * <p>Each test injects a {@link Clock#fixed fixed clock} to simulate a specific
- * point in the trading day.  All times are kept in UTC (the service's canonical
- * timezone) so one clock value fully determines the behaviour of both
- * {@code calculateAndStore} and {@code loadLatestFromDb}.
+ * point in the trading day. The service normalises prediction timestamps to
+ * Eastern-local wall clock time before persisting or querying them.
  *
  * <h3>Scenarios covered</h3>
  * <ul>
  *   <li><b>Pre-market (before 9 AM ET)</b> – verify the service generates
  *       predictions whose target hours fall inside today's ET market window
- *       (9 AM–4 PM ET = 14:00–21:00 UTC during EST).</li>
+ *       (9 AM–4 PM ET).</li>
  *   <li><b>Mid-market (10:30 AM ET)</b> – when the DB already holds fresh
  *       predictions the service returns a full-day view (past hours with
  *       actual prices, future hours without).</li>
@@ -53,10 +52,8 @@ import static org.mockito.Mockito.*;
  * </ul>
  *
  * <h3>Timezone note</h3>
- * The service stores {@code targetHour} values in UTC (via {@code clock.systemUTC()}).
- * The DB query range is also computed in UTC (ET open/close converted via
- * {@code withZoneSameInstant(UTC)}).  These tests verify that this alignment is
- * correct by inspecting saved target hours and asserting on returned prediction lists.
+ * The service stores {@code targetHour} values as Eastern-local {@code LocalDateTime}
+ * values and queries the DB using the same Eastern-local market-hour window.
  *
  * <p>US Eastern Standard Time (EST) = UTC-5, valid on the test dates (early March 2026,
  * before DST change on March 8 2026).
@@ -82,22 +79,9 @@ class StockPricePredictionServiceTest {
 
     private static final String      SYMBOL        = "TNA";
     private static final ZoneId      EASTERN       = ZoneId.of("America/New_York");
-    private static final ZoneId      UTC_ZONE      = ZoneId.of("UTC");
-
-    /** EST offset (UTC-5) active through March 7 2026 (DST starts March 8). */
-    private static final int         EST_OFFSET_H  = 5;
-
-    /**
-     * Market open in UTC during EST: 9:30 AM ET → 14:30 UTC, but predictions are
-     * generated at whole UTC hours.  The first target that falls inside the 9:30 AM
-     * market-open window is 15:00 UTC (10 AM ET). The DB query window starts at
-     * 14:30 UTC; 14:00 UTC (9 AM ET) targets are intentionally outside the window.
-     * Test helper uses 14 to generate the full set of whole-hour targets; real DB
-     * filtering (tested in timezone_dbQueryRangeIsInUTC_notJvmLocal) rejects 14:00.
-     */
-    private static final int         MARKET_OPEN_UTC  = 14;
-    /** Market close: 4:00 PM ET = 21:00 UTC during EST (UTC-5). */
-    private static final int         MARKET_CLOSE_UTC = 21;
+        private static final ZoneId      UTC_ZONE      = ZoneId.of("UTC");
+        private static final int         MARKET_OPEN_LOCAL  = 9;
+        private static final int         MARKET_CLOSE_LOCAL = 16;
 
     private static final List<String> TECHNIQUES = List.of(
             "Linear_Regression", "EMA_Extrapolation", "Momentum",
@@ -162,7 +146,7 @@ class StockPricePredictionServiceTest {
      */
     @Test
     void preMarket_weekday_calculateStoreTargetsAllInMarketWindow() {
-        // 8:00 AM ET on Monday 2 March 2026 = 13:00 UTC
+        // 8:00 AM ET on Monday 2 March 2026
         service.clock = fixedClock(2026, 3, 2, 8, 0, EASTERN);
 
         // DB is empty → triggers calculateAndStore
@@ -185,18 +169,18 @@ class StockPricePredictionServiceTest {
                 .sorted()
                 .collect(Collectors.toList());
 
-        // baseHour = 13:00 UTC; h=1..8 → 14:00, 15:00, …, 21:00 UTC
-        LocalDateTime expectedFirst = LocalDateTime.of(2026, 3, 2, MARKET_OPEN_UTC,  0); // 9 AM ET
-        LocalDateTime expectedLast  = LocalDateTime.of(2026, 3, 2, MARKET_CLOSE_UTC, 0); // 4 PM ET
+        // baseHour = 08:00 ET; h=1..8 → 09:00, 10:00, …, 16:00 ET
+        LocalDateTime expectedFirst = LocalDateTime.of(2026, 3, 2, MARKET_OPEN_LOCAL,  0);
+        LocalDateTime expectedLast  = LocalDateTime.of(2026, 3, 2, MARKET_CLOSE_LOCAL, 0);
 
         assertThat(savedTargetHours)
                 .as("exactly 8 distinct target hours are generated")
                 .hasSize(8);
         assertThat(savedTargetHours.getFirst())
-                .as("earliest target is 9 AM ET (14:00 UTC)")
+                .as("earliest target is 9 AM ET")
                 .isEqualTo(expectedFirst);
         assertThat(savedTargetHours.getLast())
-                .as("latest target is 4 PM ET (21:00 UTC)")
+                .as("latest target is 4 PM ET")
                 .isEqualTo(expectedLast);
 
         // All target hours must be within today's market window
@@ -236,20 +220,20 @@ class StockPricePredictionServiceTest {
      */
     @Test
     void midMarket_weekday_returnsFullDayWithPastAndFuturePredictions() {
-        // 10:30 AM ET = 15:30 UTC → nowHour = 15:00 UTC
+        // 10:30 AM ET → nowHour = 10:00 ET
         Instant clockInstant = fixedClock(2026, 3, 2, 10, 30, EASTERN).instant();
         service.clock = Clock.fixed(clockInstant, UTC_ZONE);
 
         // All predictions were generated 15 minutes ago (fresh)
-        LocalDateTime madeAt = LocalDateTime.of(2026, 3, 2, 15, 15); // 15:15 UTC
+        LocalDateTime madeAt = LocalDateTime.of(2026, 3, 2, 10, 15);
 
         // Build 8 hours × 5 techniques = 40 records for today's market hours
         List<StockPricePrediction> todayPredictions =
                 buildMarketHoursPredictions(SYMBOL, madeAt, LocalDate.of(2026, 3, 2));
 
-        // Past hours: 14:00 and 15:00 UTC (9 AM and 10 AM ET) ≤ nowHour (15:00 UTC)
+        // Past hours: 9:00 and 10:00 ET ≤ nowHour (10:00 ET)
         todayPredictions.stream()
-                .filter(p -> !p.getTargetHour().isAfter(LocalDateTime.of(2026, 3, 2, 15, 0)))
+                .filter(p -> !p.getTargetHour().isAfter(LocalDateTime.of(2026, 3, 2, 10, 0)))
                 .forEach(p -> p.setActualPrice(BigDecimal.valueOf(52.50)));
 
         when(repository.findBySymbolAndTargetHourBetweenOrderByTargetHourAsc(
@@ -262,26 +246,26 @@ class StockPricePredictionServiceTest {
                 .as("all 8 market hours are present in the response")
                 .hasSize(8);
 
-        // First prediction = 9 AM ET (14:00 UTC)
+        // First prediction = 9 AM ET
         assertThat(response.getHourlyPredictions().getFirst().getTargetHour())
-                .isEqualTo(LocalDateTime.of(2026, 3, 2, 14, 0));
+                .isEqualTo(LocalDateTime.of(2026, 3, 2, 9, 0));
 
-        // Last prediction = 4 PM ET (21:00 UTC)
+        // Last prediction = 4 PM ET
         assertThat(response.getHourlyPredictions().getLast().getTargetHour())
-                .isEqualTo(LocalDateTime.of(2026, 3, 2, 21, 0));
+                .isEqualTo(LocalDateTime.of(2026, 3, 2, 16, 0));
 
-        // Past hours (≤ 10 AM ET = 15:00 UTC) have actual prices filled in
+        // Past hours (≤ 10 AM ET) have actual prices filled in
         long pastWithActual = response.getHourlyPredictions().stream()
-                .filter(p -> !p.getTargetHour().isAfter(LocalDateTime.of(2026, 3, 2, 15, 0)))
+                .filter(p -> !p.getTargetHour().isAfter(LocalDateTime.of(2026, 3, 2, 10, 0)))
                 .filter(p -> p.getActualPrice() != null)
                 .count();
         assertThat(pastWithActual)
                 .as("past hours (9 AM and 10 AM ET) should have actual prices")
                 .isEqualTo(2);
 
-        // Future hours (> 10 AM ET = 15:00 UTC) have no actual price yet
+        // Future hours (> 10 AM ET) have no actual price yet
         boolean futureHaveNoActual = response.getHourlyPredictions().stream()
-                .filter(p -> p.getTargetHour().isAfter(LocalDateTime.of(2026, 3, 2, 15, 0)))
+                .filter(p -> p.getTargetHour().isAfter(LocalDateTime.of(2026, 3, 2, 10, 0)))
                 .allMatch(p -> p.getActualPrice() == null);
         assertThat(futureHaveNoActual)
                 .as("future hours should not yet have actual prices")
@@ -296,7 +280,7 @@ class StockPricePredictionServiceTest {
     void midMarket_weekday_predictedPricesArePositive() {
         service.clock = fixedClock(2026, 3, 2, 11, 0, EASTERN);
 
-        LocalDateTime madeAt = LocalDateTime.of(2026, 3, 2, 15, 45); // 10:45 AM ET = 15:45 UTC
+        LocalDateTime madeAt = LocalDateTime.of(2026, 3, 2, 10, 45);
         List<StockPricePrediction> todayPredictions =
                 buildMarketHoursPredictions(SYMBOL, madeAt, LocalDate.of(2026, 3, 2));
 
@@ -319,23 +303,23 @@ class StockPricePredictionServiceTest {
     // ========================================================================
 
     /**
-     * At 3:30 PM ET (20:30 UTC), {@code nowHour = 20:00 UTC} (3 PM ET).
-     * The only remaining future prediction is for 4 PM ET (21:00 UTC).
+        * At 3:30 PM ET, {@code nowHour = 15:00 ET}.
+        * The only remaining future prediction is for 4 PM ET.
      * All seven earlier hours carry actual prices.
      */
     @Test
     void nearClose_weekday_onlyLastHourIsFuture() {
-        // 3:30 PM ET = 20:30 UTC → nowHour = 20:00 UTC
+        // 3:30 PM ET → nowHour = 15:00 ET
         service.clock = fixedClock(2026, 3, 2, 15, 30, EASTERN);
 
-        // Predictions were last refreshed at 20:15 UTC (15 min ago — within 50-min TTL)
-        LocalDateTime madeAt = LocalDateTime.of(2026, 3, 2, 20, 15);
+        // Predictions were last refreshed at 15:15 ET (15 min ago — within 50-min TTL)
+        LocalDateTime madeAt = LocalDateTime.of(2026, 3, 2, 15, 15);
 
         List<StockPricePrediction> todayPredictions =
                 buildMarketHoursPredictions(SYMBOL, madeAt, LocalDate.of(2026, 3, 2));
 
-        // All hours up to and including 3 PM ET (20:00 UTC) are past → set actual price
-        LocalDateTime nowHour = LocalDateTime.of(2026, 3, 2, 20, 0);
+        // All hours up to and including 3 PM ET are past → set actual price
+        LocalDateTime nowHour = LocalDateTime.of(2026, 3, 2, 15, 0);
         todayPredictions.stream()
                 .filter(p -> !p.getTargetHour().isAfter(nowHour))
                 .forEach(p -> p.setActualPrice(BigDecimal.valueOf(53.10)));
@@ -384,12 +368,12 @@ class StockPricePredictionServiceTest {
      */
     @Test
     void afterHours_weekday_returnsFullHistoricalDayWithNoFuturePredictions() {
-        // 5:30 PM ET = 22:30 UTC → nowHour = 22:00 UTC
+        // 5:30 PM ET → nowHour = 17:00 ET
         service.clock = fixedClock(2026, 3, 2, 17, 30, EASTERN);
-        LocalDateTime nowHour = LocalDateTime.of(2026, 3, 2, 22, 0);
+        LocalDateTime nowHour = LocalDateTime.of(2026, 3, 2, 17, 0);
 
-        // Stale predictions from 8 AM ET (13:00 UTC) – all market hours closed
-        LocalDateTime staleMadeAt = LocalDateTime.of(2026, 3, 2, 13, 0);
+        // Historical predictions from 8 AM ET – all market hours are now past
+        LocalDateTime staleMadeAt = LocalDateTime.of(2026, 3, 2, 8, 0);
         List<StockPricePrediction> stalePredictions =
                 buildMarketHoursPredictions(SYMBOL, staleMadeAt, LocalDate.of(2026, 3, 2));
 
@@ -431,19 +415,11 @@ class StockPricePredictionServiceTest {
      */
     @Test
     void weekend_noPredictionsForCurrentDay_previousFridayDataReturned() {
-        // Saturday 7 March 2026, 10:00 AM ET = 15:00 UTC
+        // Saturday 7 March 2026, 10:00 AM ET
         service.clock = fixedClock(2026, 3, 7, 10, 0, EASTERN);
 
-        // Saturday market-hours range (14:30–21:00 UTC, 9:30 AM–4 PM ET) → no data
-        LocalDateTime satOpen  = LocalDateTime.of(2026, 3, 7, MARKET_OPEN_UTC, 30);
-        LocalDateTime satClose = LocalDateTime.of(2026, 3, 7, MARKET_CLOSE_UTC, 0); // 4 PM ET
-
-        // Previous business day = Friday 6 March 2026
-        LocalDateTime friOpen  = LocalDateTime.of(2026, 3, 6, MARKET_OPEN_UTC, 30);
-        LocalDateTime friClose = LocalDateTime.of(2026, 3, 6, MARKET_CLOSE_UTC, 0);
-
         // Build Friday's resolved predictions (all with actual prices)
-        LocalDateTime friMadeAt = LocalDateTime.of(2026, 3, 6, 14, 0);
+        LocalDateTime friMadeAt = LocalDateTime.of(2026, 3, 6, 9, 0);
         List<StockPricePrediction> fridayPredictions =
                 buildMarketHoursPredictions(SYMBOL, friMadeAt, LocalDate.of(2026, 3, 6));
         fridayPredictions.forEach(p -> p.setActualPrice(BigDecimal.valueOf(53.19)));
@@ -494,7 +470,7 @@ class StockPricePredictionServiceTest {
      */
     @Test
     void weekend_sunday_previousBusinessDayIsFriday() {
-        // Sunday 8 March 2026, 9:00 AM ET = 14:00 UTC
+        // Sunday 8 March 2026, 9:00 AM ET
         // Note: DST starts on this date but we test the date logic, not the offset
         service.clock = fixedClock(2026, 3, 8, 9, 0, EASTERN);
 
@@ -515,21 +491,14 @@ class StockPricePredictionServiceTest {
     // ========================================================================
 
     /**
-     * Verifies the UTC/ET timezone fix: the repository is queried with a range
-     * that corresponds to <em>9 AM–5 PM ET converted to UTC</em>, not to the
-     * arbitrary JVM local timezone.  This guards against the bug where
-     * {@code LocalDateTime.now()} returned JVM-local time while the query
-     * range was computed in UTC.
+        * Verifies the DB query range uses Eastern-local market hours directly,
+        * matching how target hours are stored.
      *
-     * <p>On 2 March 2026 (EST, UTC-5):
-     * <ul>
-     *   <li>Today's market open  = 9:30 AM ET = 14:30 UTC</li>
-     *   <li>Today's market close = 4:00 PM ET = 21:00 UTC</li>
-     * </ul>
+          * <p>On 2 March 2026 the query window is 9:00 AM ET through 4:00 PM ET.
      */
     @Test
-    void timezone_dbQueryRangeIsInUTC_notJvmLocal() {
-        // 9:30 AM ET = 14:30 UTC (market just opened)
+        void timezone_dbQueryRangeUsesEasternLocalMarketHours() {
+                  // 9:30 AM ET (market just opened)
         service.clock = fixedClock(2026, 3, 2, 9, 30, EASTERN);
 
         ArgumentCaptor<LocalDateTime> fromCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
@@ -543,21 +512,19 @@ class StockPricePredictionServiceTest {
 
         service.getPredictions(SYMBOL);
 
-        // The first DB call is from loadLatestFromDb — its range must be UTC-based
+        // The first DB call is from loadLatestFromDb — its range must be Eastern-local
         LocalDateTime capturedFrom = fromCaptor.getAllValues().getFirst();
         LocalDateTime capturedTo   = toCaptor.getAllValues().getFirst();
 
-        // 9:30 AM ET → 14:30 UTC for March 2 2026 (EST = UTC-5)
         assertThat(capturedFrom.getHour())
-                .as("market open query bound must start at hour 14 UTC (9:30 AM ET in EST)")
-                .isEqualTo(14);
+                .as("market open query bound must start at 9 AM ET")
+                .isEqualTo(9);
         assertThat(capturedFrom.getMinute())
-                .as("market open query bound must be 14:30 UTC — minute must be 30")
-                .isEqualTo(30);
-        // 4:00 PM ET → 21:00 UTC
+                .as("market open query bound must be on the hour")
+                .isEqualTo(0);
         assertThat(capturedTo.getHour())
-                .as("market close query bound must be 21:00 UTC (4 PM ET in EST)")
-                .isEqualTo(21);
+                .as("market close query bound must be 4 PM ET")
+                .isEqualTo(16);
         assertThat(capturedTo.getMinute())
                 .as("market close query bound must be exactly on the hour (minute 0)")
                 .isEqualTo(0);
@@ -567,12 +534,12 @@ class StockPricePredictionServiceTest {
     }
 
     /**
-     * Similarly verifies that predictions saved by {@code calculateAndStore} have
-     * UTC target hours (not JVM-local hours) so they align with the UTC DB query range.
+        * Similarly verifies that predictions saved by {@code calculateAndStore} use
+        * Eastern-local target hours so they align with the DB query range.
      */
     @Test
-    void timezone_savedTargetHoursAreInUTC() {
-        // 9:30 AM ET = 14:30 UTC
+        void timezone_savedTargetHoursUseEasternLocalTime() {
+        // 9:30 AM ET
         service.clock = fixedClock(2026, 3, 2, 9, 30, EASTERN);
 
         when(repository.findBySymbolAndTargetHourBetweenOrderByTargetHourAsc(
@@ -586,16 +553,16 @@ class StockPricePredictionServiceTest {
 
         service.getPredictions(SYMBOL);
 
-        // baseHour = 14:00 UTC (9:30 → truncated to 14:00).
-        // First target = baseHour + 1h = 15:00 UTC (10 AM ET).
+        // baseHour = 09:00 ET (9:30 → truncated to 09:00).
+        // First target = baseHour + 1h = 10:00 ET.
         LocalDateTime firstSavedTarget = saveCaptor.getAllValues().stream()
                 .map(StockPricePrediction::getTargetHour)
                 .min(LocalDateTime::compareTo)
                 .orElseThrow();
 
         assertThat(firstSavedTarget.getHour())
-                .as("first saved target must be 15:00 UTC (10 AM ET) not local time")
-                .isEqualTo(15);
+                .as("first saved target must be 10:00 ET")
+                .isEqualTo(10);
     }
 
     // ========================================================================
@@ -604,7 +571,7 @@ class StockPricePredictionServiceTest {
 
     /**
      * Creates a {@link Clock} fixed at the specified local time in the given zone,
-     * but anchored to UTC so {@link LocalDateTime#now(Clock)} returns UTC values.
+        * while preserving the represented instant.
      */
     private static Clock fixedClock(int year, int month, int day,
                                      int hour, int minute, ZoneId zone) {
@@ -615,16 +582,9 @@ class StockPricePredictionServiceTest {
     }
 
     /**
-     * Builds a list of {@link StockPricePrediction} records covering the full set of
-     * whole-UTC-hour targets that span the NYSE day (9 AM–4 PM ET =
-     * {@value #MARKET_OPEN_UTC}:00–{@value #MARKET_CLOSE_UTC}:00 UTC) for the given date,
+        * Builds a list of {@link StockPricePrediction} records covering the full set of
+        * whole-hour targets that span the NYSE day (9 AM–4 PM ET) for the given date,
      * with one record per technique per hour (5 × 8 = 40 records).
-     *
-     * <p>Note: the real DB query window starts at 9:30 AM ET (14:30 UTC), so the
-     * 14:00 UTC record generated here reflects a target that the service persists but
-     * the query filter intentionally excludes. Tests that mock the repository directly
-     * will still receive the 14:00 UTC record; the filtering is verified separately in
-     * {@link #timezone_dbQueryRangeIsInUTC_notJvmLocal()}.
      *
      * <p>All records share the same {@code predictionMadeAt} timestamp.
      * No {@code actualPrice} is set — callers set actual prices for past hours as needed.
@@ -635,9 +595,9 @@ class StockPricePredictionServiceTest {
         List<StockPricePrediction> records = new ArrayList<>();
         BigDecimal basePrice = BigDecimal.valueOf(53.00);
 
-        for (int utcHour = MARKET_OPEN_UTC; utcHour <= MARKET_CLOSE_UTC; utcHour++) {
-            LocalDateTime targetHour = date.atTime(utcHour, 0);
-            BigDecimal price = basePrice.add(BigDecimal.valueOf(utcHour - MARKET_OPEN_UTC).multiply(BigDecimal.valueOf(0.10)));
+                for (int localHour = MARKET_OPEN_LOCAL; localHour <= MARKET_CLOSE_LOCAL; localHour++) {
+                        LocalDateTime targetHour = date.atTime(localHour, 0);
+                        BigDecimal price = basePrice.add(BigDecimal.valueOf(localHour - MARKET_OPEN_LOCAL).multiply(BigDecimal.valueOf(0.10)));
 
             for (String technique : TECHNIQUES) {
                 StockPricePrediction p = new StockPricePrediction();

@@ -1,5 +1,6 @@
 package com.example.stockbrokerage.service;
 
+import com.example.stockbrokerage.dto.OptionsSnapshot;
 import com.example.stockbrokerage.dto.TrendPrediction;
 import com.example.stockbrokerage.dto.TrendPrediction.TrendDirection;
 import com.example.stockbrokerage.entity.TrendPredictionWeightHistory;
@@ -36,15 +37,18 @@ public class TrendAnalysisService {
     private final TrendPredictionWeightRepository trendWeightRepository;
     private final TrendPredictionWeightHistoryRepository trendWeightHistoryRepository;
     private final MarketIndexService marketIndexService;
-    
+    private final OptionsDataService optionsDataService;
+
     // Technique names
-    private static final String MA_CROSSOVER    = "MA_Crossover";
-    private static final String RSI             = "RSI";
-    private static final String MACD            = "MACD";
-    private static final String PRICE_MOMENTUM  = "Price_Momentum";
-    private static final String VOLUME_TREND    = "Volume_Trend";
+    private static final String MA_CROSSOVER       = "MA_Crossover";
+    private static final String RSI                = "RSI";
+    private static final String MACD               = "MACD";
+    private static final String PRICE_MOMENTUM     = "Price_Momentum";
+    private static final String VOLUME_TREND       = "Volume_Trend";
     /** Composite trend signal derived from weighted market-index movements. */
-    private static final String INDEX_MOMENTUM  = "Index_Momentum";
+    private static final String INDEX_MOMENTUM     = "Index_Momentum";
+    /** Contrarian sentiment signal derived from options market put/call ratio and IV. */
+    private static final String OPTIONS_SENTIMENT  = "Options_Sentiment";
     
     @Transactional
     public TrendPrediction analyzeTrend(String symbol) {
@@ -67,10 +71,11 @@ public class TrendAnalysisService {
             techniqueResults.put(MA_CROSSOVER,   calculateMACrossover(prices));
             techniqueResults.put(RSI,             calculateRSI(prices));
             techniqueResults.put(MACD,            calculateMACD(prices));
-            techniqueResults.put(PRICE_MOMENTUM,  calculatePriceMomentum(prices));
-            techniqueResults.put(VOLUME_TREND,    calculateVolumeTrend(volumes));
-            techniqueResults.put(INDEX_MOMENTUM,  calculateIndexMomentum(symbol));
-            
+            techniqueResults.put(PRICE_MOMENTUM,     calculatePriceMomentum(prices));
+            techniqueResults.put(VOLUME_TREND,        calculateVolumeTrend(volumes));
+            techniqueResults.put(INDEX_MOMENTUM,      calculateIndexMomentum(symbol));
+            techniqueResults.put(OPTIONS_SENTIMENT,   calculateOptionsSentiment(symbol));
+
         } catch (Exception e) {
             log.error("Error calculating trends for {}", symbol, e);
             // Return default if error
@@ -169,6 +174,38 @@ public class TrendAnalysisService {
         return TrendDirection.SIDEWAYS;
     }
     
+    /**
+     * Contrarian sentiment signal derived from the options market.
+     *
+     * <p>Uses the front-month put/call open-interest ratio as a sentiment gauge:
+     * <ul>
+     *   <li>PCR &gt; 1.5 – extreme bearish hedging (fear) → contrarian <b>UPTREND</b></li>
+     *   <li>PCR &lt; 0.7 – heavy call buying (greed/complacency) → contrarian <b>DOWNTREND</b></li>
+     *   <li>otherwise → SIDEWAYS</li>
+     * </ul>
+     * Returns SIDEWAYS when options data is unavailable so downstream weight
+     * calculations are unaffected.
+     */
+    private TrendDirection calculateOptionsSentiment(String symbol) {
+        OptionsSnapshot snap = optionsDataService.getOptionsSnapshot(symbol);
+        if (!snap.dataAvailable()) {
+            log.debug("OPTIONS_SENTIMENT unavailable for {} – defaulting to SIDEWAYS", symbol);
+            return TrendDirection.SIDEWAYS;
+        }
+        double iv  = snap.atmImpliedVolatility();
+        double pcr = snap.putCallRatioOI();
+        if (pcr > 1.5) {
+            log.debug("OPTIONS_SENTIMENT for {}: UPTREND (PCR={:.2f}, IV={:.1f}%)", symbol, pcr, iv * 100);
+            return TrendDirection.UPTREND;
+        }
+        if (pcr < 0.7) {
+            log.debug("OPTIONS_SENTIMENT for {}: DOWNTREND (PCR={:.2f}, IV={:.1f}%)", symbol, pcr, iv * 100);
+            return TrendDirection.DOWNTREND;
+        }
+        log.debug("OPTIONS_SENTIMENT for {}: SIDEWAYS (PCR={:.2f}, IV={:.1f}%)", symbol, pcr, iv * 100);
+        return TrendDirection.SIDEWAYS;
+    }
+
     /**
      * Derives a trend direction from the composite market-index adjustment factor.
      * A positive dampened factor means the weighted basket of indices is signalling
@@ -369,15 +406,16 @@ public class TrendAnalysisService {
         Path weightsPath = Paths.get(weightsFile);
         
         if (!Files.exists(weightsPath)) {
-            // Initialize with balanced weights across all six techniques
-            weights.put(MA_CROSSOVER,   0.20);
-            weights.put(RSI,            0.20);
-            weights.put(MACD,           0.15);
-            weights.put(PRICE_MOMENTUM, 0.20);
-            weights.put(VOLUME_TREND,   0.10);
-            weights.put(INDEX_MOMENTUM, 0.15);
+            // Initialize with balanced weights across all seven techniques (total = 1.00)
+            weights.put(MA_CROSSOVER,      0.18);
+            weights.put(RSI,               0.18);
+            weights.put(MACD,              0.13);
+            weights.put(PRICE_MOMENTUM,    0.18);
+            weights.put(VOLUME_TREND,      0.08);
+            weights.put(INDEX_MOMENTUM,    0.12);
+            weights.put(OPTIONS_SENTIMENT, 0.13);
             saveWeights(symbol, weights);
-            log.info("Initialized default weights (incl. Index_Momentum) for {}", symbol);
+            log.info("Initialized default weights (incl. Index_Momentum, Options_Sentiment) for {}", symbol);
             return weights;
         }
         
@@ -399,7 +437,12 @@ public class TrendAnalysisService {
         } catch (IOException e) {
             log.error("Error loading weights for {}", symbol, e);
         }
-        
+
+        // Ensure new techniques added after initial deployment have a default weight
+        // so existing per-symbol CSV files don't need to be migrated manually.
+        weights.putIfAbsent(OPTIONS_SENTIMENT, 0.13);
+        weights.putIfAbsent(INDEX_MOMENTUM,    0.12);
+
         return weights;
     }
     

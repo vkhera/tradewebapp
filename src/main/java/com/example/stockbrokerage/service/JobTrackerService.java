@@ -81,8 +81,10 @@ public class JobTrackerService {
      */
     public boolean wasJobMissedSinceLastRun(String jobName, int lookbackHours) {
         if (!repository.existsByJobName(jobName)) {
-            // First-ever startup – no history, don't auto-run
-            return false;
+            // No history (e.g. new feature deployment or fresh DB) – treat as missed so any
+            // pending work accumulated while tracking was absent gets processed immediately.
+            log.info("No execution history for '{}' – treating as missed to process any pending work", jobName);
+            return true;
         }
         LocalDateTime since = LocalDateTime.now().minusHours(lookbackHours);
         boolean hasRecentSuccess = repository.existsByJobNameAndStatusAndStartedAtAfter(

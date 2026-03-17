@@ -797,44 +797,76 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   /**
    * Returns true if the targetHour falls within NYSE market hours:
-   * 9:30 AM – 4:00 PM Eastern Time.
+   * 9:00 AM – 4:00 PM Eastern Time.
    *
    * targetHour is a LocalDateTime from the backend serialised without timezone
-   * (e.g. "2026-02-19T10:30:00"), so we parse the time component directly from
-   * the ISO string to avoid browser-timezone conversion errors.
+   * and represents Eastern-local wall clock time. Parse the time component
+   * directly so the browser timezone does not shift it.
    */
   private isDuringMarketHours(isoString: string): boolean {
     if (!isoString) return false;
-    // The backend stores targetHour as UTC LocalDateTime (Docker container runs in UTC).
-    // Extract "HH:MM" directly from the ISO string to read the UTC hour.
-    const timePart = isoString.substring(11, 16);   // e.g. "14:30"
+    const timePart = isoString.substring(11, 16);
     const [hStr, mStr] = timePart.split(':');
     const totalMinutes = parseInt(hStr, 10) * 60 + parseInt(mStr, 10);
-    // NYSE market hours converted to UTC:
-    //   9:30 AM ET (EST=UTC-5) = 14:30 UTC = 870 min
-    //   9:30 AM ET (EDT=UTC-4) = 13:30 UTC = 810 min  ← use as lower bound to cover DST
-    //   4:00 PM ET (EST=UTC-5) = 21:00 UTC = 1260 min ← use as upper bound
-    //   4:00 PM ET (EDT=UTC-4) = 20:00 UTC = 1200 min
-    return totalMinutes >= 810 && totalMinutes <= 1260;
+    return totalMinutes >= 540 && totalMinutes <= 960;
   }
 
   private formatHour(isoString: string): string {
     if (!isoString) return '';
-    // Backend sends UTC LocalDateTime without 'Z'; append 'Z' so the browser parses as UTC,
-    // then convert to Eastern Time for display.
-    const utcDate = new Date(isoString + 'Z');
-    return utcDate.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZone: 'America/New_York',
-      hour12: true
-    }).replace(':00', '');
+    const timePart = isoString.substring(11, 16);
+    const [hourText, minuteText] = timePart.split(':');
+    const hour = parseInt(hourText, 10);
+    const minute = parseInt(minuteText, 10);
+    const suffix = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+    return minute === 0 ? `${hour12} ${suffix}` : `${hour12}:${minuteText} ${suffix}`;
   }
 
   private isPastHour(isoString: string): boolean {
     if (!isoString) return false;
-    // Append 'Z' so the ISO string is parsed as UTC, matching how the backend stores targetHour
-    return new Date(isoString + 'Z').getTime() < Date.now();
+    const target = this.parseEasternLocalDateTime(isoString);
+    if (!target) return false;
+
+    const nowEastern = this.getCurrentEasternDateTime();
+    return target.getTime() < nowEastern.getTime();
+  }
+
+  private parseEasternLocalDateTime(isoString: string): Date | null {
+    const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!match) return null;
+
+    const [, year, month, day, hour, minute, second = '0'] = match;
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second)
+    );
+  }
+
+  private getCurrentEasternDateTime(): Date {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).formatToParts(new Date());
+
+    const value = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value ?? '0';
+    return new Date(
+      Number(value('year')),
+      Number(value('month')) - 1,
+      Number(value('day')),
+      Number(value('hour')),
+      Number(value('minute')),
+      Number(value('second'))
+    );
   }
 
   downloadCSV() {

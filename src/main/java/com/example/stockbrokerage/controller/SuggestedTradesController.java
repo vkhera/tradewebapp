@@ -12,6 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 import java.util.List;
 
 @RestController
@@ -55,5 +57,18 @@ public class SuggestedTradesController {
     )
     public ResponseEntity<TradeSuccessRateResponse> getSuccessRate(@PathVariable Long clientId) {
         return ResponseEntity.ok(trackingService.getSuccessRate(clientId));
+    }
+
+    @PostMapping("/admin/run-check")
+    @Operation(
+        summary = "Manually trigger the pending suggestions performance check",
+        description = "Force-runs the same check that normally executes daily at 06:00. "
+            + "Evaluates all PENDING suggestion records and marks them SUCCESS or FAILED "
+            + "based on current and historical market prices."
+    )
+    public ResponseEntity<Map<String, String>> runCheck() {
+        log.info("Manual trigger: running pending suggestions performance check");
+        trackingService.checkPendingSuggestions();
+        return ResponseEntity.ok(Map.of("status", "completed", "message", "Pending suggestions check executed successfully"));
     }
 }

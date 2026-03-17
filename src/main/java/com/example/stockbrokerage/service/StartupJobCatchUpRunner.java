@@ -26,6 +26,11 @@ import org.springframework.stereotype.Component;
  *   <li>{@code TRADE_SUGGESTION_CHECK} – 23 hours (daily at 06:00)</li>
  *   <li>{@code SWING_TRADE_CHECK}       – 23 hours (daily at 06:30)</li>
  *   <li>{@code DATA_SYNC}               – 25 hours (daily at 02:00 ET; extra buffer for tz drift)</li>
+ *   <li>{@code DB_BACKUP}               – 25 hours (daily at 16:00 ET; runs in the pgbackup container).
+ *       Because Spring Boot cannot invoke {@code pg_dump} directly, the catch-up action writes
+ *       a trigger file to the shared backup directory.  The pgbackup container reads this file
+ *       on its next startup and runs an immediate backup before entering its scheduled loop.
+ *       {@code pg-backup.sh} also registers each run in {@code job_execution_records}.</li>
  * </ul>
  */
 @Component
@@ -37,6 +42,8 @@ public class StartupJobCatchUpRunner implements ApplicationListener<ApplicationR
     private final SuggestedTradeTrackingService tradeTrackingService;
     private final SwingTradeTrackingService swingTrackingService;
     private final DataSyncBatchService dataSyncService;
+    private final PredictionScoringService predictionScoringService;
+    private final DbBackupTriggerService dbBackupTriggerService;
 
     @Override
     public void onApplicationEvent(@org.springframework.lang.NonNull ApplicationReadyEvent event) {
@@ -47,6 +54,14 @@ public class StartupJobCatchUpRunner implements ApplicationListener<ApplicationR
                 swingTrackingService::evaluatePendingSwingTrades);
         checkAndRun(DataSyncBatchService.JOB_NAME,          25,
                 dataSyncService::syncPriceDataToDatabase);
+        // PREDICTION_SCORING: window is 25 h (fires at 18:00; extra buffer for weekends)
+        checkAndRun(PredictionScoringService.JOB_NAME,      25,
+                () -> predictionScoringService.runTracked(java.time.LocalDate.now().minusDays(1)));
+        // DB_BACKUP: runs in the external pgbackup container (pg-backup.sh, 16:00 ET).
+        // Spring Boot cannot invoke pg_dump directly; the catch-up action writes a trigger
+        // file that the pgbackup container reads on its next startup.
+        checkAndRun(DbBackupTriggerService.JOB_NAME,        25,
+                dbBackupTriggerService::requestImmediateBackup);
     }
 
     /**

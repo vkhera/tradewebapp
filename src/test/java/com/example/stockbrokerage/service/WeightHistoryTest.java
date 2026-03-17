@@ -116,7 +116,8 @@ class WeightHistoryTest {
             mock(TrendPredictionResultRepository.class),
             trendWeightRepo,
             trendHistRepo,
-            mock(MarketIndexService.class)
+            mock(MarketIndexService.class),
+            mock(OptionsDataService.class)
         );
 
         // Invoke private saveWeights via reflection
@@ -147,7 +148,8 @@ class WeightHistoryTest {
             mock(TrendPredictionResultRepository.class),
             trendWeightRepo,
             trendHistRepo,
-            mock(MarketIndexService.class)
+            mock(MarketIndexService.class),
+            mock(OptionsDataService.class)
         );
 
         var method = TrendAnalysisService.class.getDeclaredMethod("saveWeights", String.class, Map.class);

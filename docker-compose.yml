@@ -65,6 +65,9 @@ services:
       # Persist prediction CSV caches across container restarts
       - ./stock_predictions:/app/stock_predictions
       - ./trend_predictions:/app/trend_predictions
+      # Shared with the pgbackup container so StartupJobCatchUpRunner can write
+      # a trigger file that pg-backup.sh reads on its next startup.
+      - ./backup:/app/backup
     depends_on:
       postgres:
         condition: service_healthy

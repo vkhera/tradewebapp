@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -20,6 +21,9 @@ public interface TrendPredictionResultRepository extends JpaRepository<TrendPred
     /** Latest result for a symbol (used for fast portfolio read without re-analysis). */
     @Query("SELECT t FROM TrendPredictionResult t WHERE t.symbol = :symbol ORDER BY t.predictionDate DESC LIMIT 1")
     Optional<TrendPredictionResult> findLatestBySymbol(@Param("symbol") String symbol);
+
+    /** All trend predictions for a specific date (one per symbol). */
+    List<TrendPredictionResult> findByPredictionDate(LocalDate predictionDate);
 
     /** Full upsert – updates all fields when the same (symbol, date) is re-analysed. */
     @Transactional
