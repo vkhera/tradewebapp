@@ -77,6 +77,13 @@ public class RealYahooFinanceClient implements YahooFinanceClient {
             return price;
         }
 
+        // 4th fallback: query2 CDN v8/chart — different CDN node, often succeeds when query1 rejects with 401
+        price = tryQuery2ChartEndpoint(symbol);
+        if (price.compareTo(BigDecimal.ZERO) > 0) {
+            priceCache.put(symbol, new CachedPrice(price, System.currentTimeMillis() + PRICE_CACHE_TTL_MS));
+            return price;
+        }
+
         log.warn("All Yahoo Finance price endpoints failed for symbol: {}", symbol);
         return BigDecimal.ZERO;
     }
@@ -96,10 +103,18 @@ public class RealYahooFinanceClient implements YahooFinanceClient {
 
     @Override
     public List<BigDecimal> getHistoricalPrices(String symbol) {
+        // Try query1 first (primary CDN); fall back to query2 if rate-limited or crumb expired
+        List<BigDecimal> prices = fetchChart5mPrices(symbol, "query1");
+        if (!prices.isEmpty()) return prices;
+        log.info("query1 5-min history failed for {} — retrying via query2.finance.yahoo.com", symbol);
+        return fetchChart5mPrices(symbol, "query2");
+    }
+
+    private List<BigDecimal> fetchChart5mPrices(String symbol, String queryHost) {
         try {
             // 5-min bars, 60-day range — ~4 680 bars (free, no API key)
-            String url = "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=5m&range=60d"
-                    .formatted(symbol);
+            String url = "https://%s.finance.yahoo.com/v8/finance/chart/%s?interval=5m&range=60d"
+                    .formatted(queryHost, symbol);
 
             HttpHeaders headers = new HttpHeaders();
             headers.set("User-Agent", USER_AGENT);
@@ -111,25 +126,33 @@ public class RealYahooFinanceClient implements YahooFinanceClient {
                     restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
 
             if (response.getStatusCode() != HttpStatus.OK || response.getBody() == null) {
-                log.warn("Yahoo Finance chart endpoint returned {} for {}", response.getStatusCode(), symbol);
+                log.warn("Yahoo Finance chart endpoint ({}) returned {} for {}", queryHost, response.getStatusCode(), symbol);
                 return List.of();
             }
 
             return parseHistoricalResponse(response.getBody(), symbol);
 
         } catch (Exception e) {
-            log.warn("Failed to fetch historical prices from Yahoo Finance for {}: {}", symbol, e.getMessage());
+            log.warn("Failed to fetch historical prices from {}.finance.yahoo.com for {}: {}", queryHost, symbol, e.getMessage());
             return List.of();
         }
     }
 
     @Override
     public List<DailyBar> getDailyBars(String symbol, int days) {
+        // Try query1 first; fall back to query2 CDN on failure
+        List<DailyBar> bars = fetchDailyBarsFromHost(symbol, days, "query1");
+        if (!bars.isEmpty()) return bars;
+        log.info("query1 daily bars failed for {} — retrying via query2.finance.yahoo.com", symbol);
+        return fetchDailyBarsFromHost(symbol, days, "query2");
+    }
+
+    private List<DailyBar> fetchDailyBarsFromHost(String symbol, int days, String queryHost) {
         try {
             // Use 6mo range for up to ~126 trading days of daily OHLCV data
             String range = days <= 60 ? "3mo" : "6mo";
-            String url = "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=%s"
-                    .formatted(symbol, range);
+            String url = "https://%s.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=%s"
+                    .formatted(queryHost, symbol, range);
 
             HttpHeaders headers = new HttpHeaders();
             headers.set("User-Agent", USER_AGENT);
@@ -141,14 +164,14 @@ public class RealYahooFinanceClient implements YahooFinanceClient {
                     restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
 
             if (response.getStatusCode() != HttpStatus.OK || response.getBody() == null) {
-                log.warn("Yahoo Finance daily chart returned {} for {}", response.getStatusCode(), symbol);
+                log.warn("Yahoo Finance daily chart ({}) returned {} for {}", queryHost, response.getStatusCode(), symbol);
                 return List.of();
             }
 
             return parseDailyBarsResponse(response.getBody(), symbol);
 
         } catch (Exception e) {
-            log.warn("Failed to fetch daily bars from Yahoo Finance for {}: {}", symbol, e.getMessage());
+            log.warn("Failed to fetch daily bars from {}.finance.yahoo.com for {}: {}", queryHost, symbol, e.getMessage());
             return List.of();
         }
     }
@@ -156,6 +179,38 @@ public class RealYahooFinanceClient implements YahooFinanceClient {
     // -------------------------------------------------------------------------
     // Private helpers — price endpoints
     // -------------------------------------------------------------------------
+
+    private BigDecimal tryQuery2ChartEndpoint(String symbol) {
+        try {
+            String url = "https://query2.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=1d"
+                    .formatted(symbol);
+            log.info("Trying query2/v8/chart endpoint for symbol: {}", symbol);
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+
+            if (response != null && response.containsKey("chart")) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> chart = (Map<String, Object>) response.get("chart");
+                if (chart.containsKey("result")) {
+                    @SuppressWarnings("unchecked")
+                    var results = (java.util.List<Map<String, Object>>) chart.get("result");
+                    if (!results.isEmpty()) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> meta = (Map<String, Object>) results.getFirst().get("meta");
+                        if (meta != null && meta.containsKey("regularMarketPrice")) {
+                            double price = ((Number) meta.get("regularMarketPrice")).doubleValue();
+                            log.info("\u2713 query2/v8/chart succeeded for {}: {}", symbol, price);
+                            return BigDecimal.valueOf(price);
+                        }
+                    }
+                }
+            }
+        } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests e) {
+            log.warn("\u2717 query2/v8/chart rate limited for {}", symbol);
+        } catch (Exception e) {
+            log.warn("\u2717 query2/v8/chart failed for {}: {}", symbol, e.getMessage());
+        }
+        return BigDecimal.ZERO;
+    }
 
     private BigDecimal tryQuoteEndpoint(String symbol) {
         try {

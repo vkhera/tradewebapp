@@ -33,6 +33,7 @@ public class OpenApiConfig {
                     - Portfolio tracking and P/L reporting\n
                     - Multi-technique trend analysis (MA Crossover, RSI, MACD, Momentum, Volume) with adaptive per-stock weights\n
                     - 8-hour stock price prediction using 5-min Yahoo Finance bars (Linear Regression, EMA, Momentum, Mean Reversion, Holt-Winters)\n
+                    - 4-endpoint Yahoo Finance fallback chain: query1 v7/quote → query1 v8/chart → query2 v6/quote → query2 v8/chart; price sanity guard rejects CSV writes deviating >60% from cached price\n
                     - CSV import/export for holdings and activity (restricted to own account; admin-unrestricted)\n\
                     - **Suggested Trades**: top-5 sell/buy-back recommendations driven by ATR(14) and 8-hour predicted prices (>2% expected move threshold)\n\
                     - Weight history trail: full audit log of every prediction & trend weight change (symbol, technique, old/new value, timestamp)\n\
@@ -44,7 +45,7 @@ public class OpenApiConfig {
                     \n
                     **Rate Limits (default 1 TPS):** TradeService 5 TPS · AccountService 5 TPS · PortfolioService 10 TPS · StockPriceService 10 TPS · PredictionService 2 TPS · TrendAnalysis 3 TPS · AuthService 3 TPS
                     """)
-                .version("2.2.0")
+                .version("2.3.0")
                 .contact(new Contact()
                     .name("Stock Brokerage Team")
                     .email("support@stockbrokerage.com"))
@@ -62,11 +63,11 @@ public class OpenApiConfig {
                 new Tag().name("Authentication").description("Login and session management"),
                 new Tag().name("Accounts").description("Client cash account operations (fund / withdraw)"),
                 new Tag().name("Portfolio").description("Portfolio holdings, P/L and summary"),
-                new Tag().name("Stocks").description("Real-time stock price and quote lookup"),
+                new Tag().name("Stocks").description("Real-time stock price and quote lookup \u2014 4-endpoint Yahoo Finance fallback (query1 v7/quote \u2192 query1 v8/chart \u2192 query2 v6/quote \u2192 query2 v8/chart)"),
                 new Tag().name("Trades").description("Order submission, status and history"),
                 new Tag().name("Suggested Trades").description("AI-powered trade suggestions based on ATR(14) and 8-hour price predictions"),
                 new Tag().name("Trend Analysis").description("Multi-technique stock trend analysis with adaptive per-stock weights"),
-                new Tag().name("Price Predictions").description("8-hour hourly price predictions using 5-min Yahoo Finance bars"),
+                new Tag().name("Price Predictions").description("8-hour hourly price predictions using 5-min Yahoo Finance bars (query1+query2 4-endpoint fallback, CSV sanity guard)"),
                 new Tag().name("Import").description("Bulk CSV import of holdings and activity (restricted to own account; admins unrestricted)"),
                 new Tag().name("Clients").description("Client registration and profile management"),
                 new Tag().name("Admin – Clients").description("Admin: client management and audit logs"),

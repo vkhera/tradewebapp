@@ -91,7 +91,7 @@ graph TB
         subgraph SVC["Business Services"]
             TS[TradeService]
             PS[PortfolioService]
-            SPS[StockPriceService\nYahoo Finance 3-endpoint fallback]
+            SPS[StockPriceService\nYahoo Finance 4-endpoint fallback]
             SMDS[StockMarketDataService\n5-min bars · CSV cache · 5 min TTL]
             SPPS[StockPricePredictionService\n5 techniques · adaptive weights\n50-min cache]
             TAS[TrendAnalysisService\n5 techniques · per-stock weights]
@@ -130,7 +130,7 @@ graph TB
     end
 
     subgraph EXT["External API (Free · No Key)"]
-        YF[Yahoo Finance v8 Chart\ninterval=5m · range=60d\nUser-Agent header]
+        YF[Yahoo Finance\nquery1 v7/quote → query1 v8/chart\nquery2 v6/quote → query2 v8/chart\n4-endpoint fallback · interval=5m · range=60d]
     end
 
     Browser -->|HTTP/JSON Bearer Auth| API

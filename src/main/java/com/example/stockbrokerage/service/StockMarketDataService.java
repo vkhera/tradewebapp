@@ -48,14 +48,18 @@ public class StockMarketDataService {
 
         // Fetch fresh from Yahoo Finance (real or mock, depending on active profile)
         List<BigDecimal> prices = yahooFinanceClient.getHistoricalPrices(symbol);
+        boolean isFallback = false;
 
         if (prices.isEmpty()) {
             log.warn("Yahoo Finance returned no data for {}, using fallback", symbol);
             prices = generateRealisticFallback(symbol, bars);
+            isFallback = true;
         }
 
-        // Persist to CSV cache
-        if (!prices.isEmpty()) {
+        // Only persist real Yahoo Finance data — never synthetic fallback prices.
+        // Saving fallback (hash-seeded random walk) would corrupt the cache with
+        // fictitious prices that then drive wrong predictions and wrong actual-price resolution.
+        if (!prices.isEmpty() && !isFallback) {
             saveToCsvCache(symbol, prices);
         }
 
@@ -64,13 +68,27 @@ public class StockMarketDataService {
 
     /**
      * Returns the current (most recent) price for the symbol.
+     * <p>
+     * Always calls Yahoo Finance directly (which maintains its own 5-min in-memory cache)
+     * rather than the 60-min CSV cache.  The CSV can contain stale or corrupted data that
+     * is unsuitable for real-time price resolution (e.g. resolving prediction actual prices).
      */
     public BigDecimal getCurrentPrice(String symbol) {
-        List<BigDecimal> prices = getPrices(symbol, 1);
-        if (!prices.isEmpty()) {
-            return prices.getLast();
+        // Bypass the 60-min CSV cache — use the live Yahoo Finance price instead.
+        // RealYahooFinanceClient maintains its own 5-min in-memory cache so this does
+        // not cause excessive HTTP calls.
+        BigDecimal livePrice = yahooFinanceClient.getCurrentPrice(symbol);
+        if (livePrice.compareTo(BigDecimal.ZERO) > 0) {
+            return livePrice;
         }
-        return BigDecimal.valueOf(100); // ultimate fallback
+        // Yahoo Finance unavailable — fall back to the most recent CSV entry.
+        List<BigDecimal> cached = loadFromCsvCache(symbol, 1);
+        if (!cached.isEmpty()) {
+            log.warn("Yahoo Finance unavailable for {} — using CSV cache as price fallback", symbol);
+            return cached.getLast();
+        }
+        log.warn("No price data available for {} — returning nominal fallback 100", symbol);
+        return BigDecimal.valueOf(100);
     }
 
     // -------------------------------------------------------------------------
@@ -112,7 +130,27 @@ public class StockMarketDataService {
     }
 
     private void saveToCsvCache(String symbol, List<BigDecimal> prices) {
+        if (prices.isEmpty()) return;
         Path csvPath = Paths.get(DATA_DIR, symbol + "_prices.csv");
+
+        // Sanity guard: reject a write whose last price deviates more than 60% from the
+        // current cached last price.  This catches cases where Yahoo Finance returned
+        // another symbol's data (e.g. TNA prices written to NVDA_prices.csv).
+        Optional<BigDecimal> lastCached = readLastCachedPrice(symbol);
+        if (lastCached.isPresent()) {
+            BigDecimal existing = lastCached.get();
+            BigDecimal incoming = prices.getLast();
+            if (existing.compareTo(BigDecimal.ZERO) > 0) {
+                double ratio = incoming.divide(existing, 6, RoundingMode.HALF_UP).doubleValue();
+                if (ratio < 0.4 || ratio > 2.5) {
+                    log.error("Price sanity check FAILED for {}: cached last={}, incoming last={} (ratio={})."
+                        + " Rejecting cache write to prevent data corruption.",
+                        symbol, existing, incoming, String.format("%.3f", ratio));
+                    return;
+                }
+            }
+        }
+
         try (PrintWriter writer = new PrintWriter(new FileWriter(csvPath.toFile()))) {
             writer.println("Timestamp,ClosePrice");
             // Generate approximate 5-min timestamps going back
@@ -128,6 +166,30 @@ public class StockMarketDataService {
         } catch (IOException e) {
             log.error("Error saving price CSV cache for {}: {}", symbol, e.getMessage());
         }
+    }
+
+    /**
+     * Reads the last close price from an existing CSV cache file without applying the
+     * 60-min freshness filter.  Used for sanity-checking incoming data before overwriting.
+     */
+    private Optional<BigDecimal> readLastCachedPrice(String symbol) {
+        Path csvPath = Paths.get(DATA_DIR, symbol + "_prices.csv");
+        if (!Files.exists(csvPath)) return Optional.empty();
+        try {
+            List<String> lines = Files.readAllLines(csvPath);
+            for (int i = lines.size() - 1; i >= 1; i--) {
+                String line = lines.get(i).trim();
+                if (!line.isEmpty()) {
+                    String[] parts = line.split(",");
+                    if (parts.length >= 2 && !parts[1].isBlank()) {
+                        return Optional.of(new BigDecimal(parts[1].trim()));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Error reading last cached price for {}: {}", symbol, e.getMessage());
+        }
+        return Optional.empty();
     }
 
     // -------------------------------------------------------------------------
