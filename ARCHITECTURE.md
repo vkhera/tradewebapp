@@ -1,134 +1,161 @@
 # Architecture Diagrams
 
-Five diagrams covering deployment topology, service wiring, real-time data flow, scheduled batch processing, and observability.
+Eight diagrams: deployment topology, service architecture, real-time data flow, scheduled batch processing, observability stack, and use cases for clients, admins, and the automated scheduler.
+
+## Table of Contents
+
+1. [System Deployment Topology](#1-system-deployment-topology)
+2. [Backend Service Architecture](#2-backend-service-architecture)
+3. [Real-time Data Flow](#3-real-time-data-flow-user-triggered)
+4. [Scheduled Batch Processing](#4-scheduled-batch-processing-pipeline)
+5. [Observability & Monitoring](#5-observability--monitoring-stack)
+6. [Client / Investor Use Cases](#6-client--investor-use-cases)
+7. [Admin Use Cases](#7-admin-use-cases)
+8. [System Scheduler Use Cases](#8-system-scheduler-use-cases)
 
 ---
 
 ## 1. System Deployment Topology
 
-All Docker containers with ports, network connections, volumes, and external systems.
+All containers with ports, network connections, and external systems. Databases use cylinder shapes; external services use pill shapes.
 
 ```mermaid
 graph TB
-    Browser["🌐 Browser"]
-    YF["Yahoo Finance API\nquery1/query2.finance.yahoo.com"]
-    DH["Docker Hub\nvkdocker/"]
+    classDef browser fill:#0D47A1,stroke:#01579B,color:#fff
+    classDef frontend fill:#0277BD,stroke:#01579B,color:#fff
+    classDef backend fill:#2E7D32,stroke:#1B5E20,color:#fff
+    classDef database fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef cache fill:#C62828,stroke:#B71C1C,color:#fff
+    classDef external fill:#6A1B9A,stroke:#4A148C,color:#fff
+    classDef observability fill:#E65100,stroke:#BF360C,color:#fff
+    classDef quality fill:#4527A0,stroke:#311B92,color:#fff
 
-    subgraph DockerCompose["Docker Compose  ·  stock-net"]
+    Browser(["🌐 Browser"]):::browser
+    YF(["☁️ Yahoo Finance\nquery1 / query2.finance.yahoo.com"]):::external
+    DH(["🐋 Docker Hub  vkdocker/"]):::external
+
+    subgraph DockerCompose["🐋 Docker Compose · stock-net"]
         subgraph FETier["Frontend Tier"]
-            NGINX["nginx + Angular SPA\n:80 HTTP  /  :443 HTTPS\nnginx.conf  |  SSL termination"]
+            NGINX["🔀 nginx\n:80 HTTP · :443 HTTPS\n📦 Angular 17 SPA  ·  SSL termination"]:::frontend
         end
 
         subgraph BETier["Backend Tier"]
-            SB["Spring Boot 3.2 · Java 21\n:8080\n~16 Controllers  |  30+ Services\nActuator /metrics /health"]
+            SB["🌿 Spring Boot 3.2 · ☕ Java 21\n:8080\n16 Controllers · 30+ Services\n📊 /actuator/metrics /health"]:::backend
         end
 
         subgraph DataTier["Data Tier"]
-            PG["PostgreSQL 16\n:5432  ·  stockdb\n21+ tables  ·  JPA"]
-            RD["Redis 7\n:6379\nSpring @Cacheable\nTTL = 10 min"]
+            PG[("🐘 PostgreSQL 16\n:5432 · stockdb\n21+ tables · JPA")]:::database
+            RD[("⚡ Redis 7\n:6379\nSpring @Cacheable · TTL 10 min")]:::cache
         end
 
-        subgraph ObsTier["Observability Stack  (docker-compose.observability.yml)"]
-            PROM["Prometheus\n:9090"]
-            LOKI["Loki\n:3100"]
-            PT["Promtail"]
-            TEMPO["Tempo\n:9411 Zipkin\n:3200 HTTP"]
-            GRAF["Grafana\n:3000"]
+        subgraph ObsTier["Observability Stack"]
+            PROM["🔥 Prometheus\n:9090\nscrape every 15 s"]:::observability
+            LOKI["📋 Loki\n:3100\nlog aggregation"]:::observability
+            PT["Promtail\ntail logs/"]:::observability
+            TEMPO["🔮 Tempo\n:9411 Zipkin · :3200"]:::observability
+            GRAF["📊 Grafana\n:3000\ndashboards"]:::observability
         end
 
-        QS["Quality Scheduler\n(quality/Dockerfile.scheduler)\nPlaywright UI · k6 load · Chaos"]
+        QS["🧪 Quality Scheduler\nPlaywright · k6 · Chaos"]:::quality
     end
 
     Browser -->|"HTTPS :443 / HTTP :80"| NGINX
-    NGINX -->|"/api/** proxy_pass :8080"| SB
-
+    NGINX -->|"/api/** → :8080"| SB
     SB -->|"JDBC / JPA"| PG
     SB -->|"Lettuce client"| RD
-    SB -->|"HTTPS  v7/v8/v6 chart API"| YF
-
-    PROM -->|"scrape /actuator/prometheus  every 15 s"| SB
-    PT -->|"tail logs/ directory"| SB
+    SB -->|"HTTPS REST"| YF
+    PROM -->|"GET /actuator/prometheus  every 15 s"| SB
+    PT -->|"tail logs/"| SB
     PT -->|"Loki push"| LOKI
-    SB -->|"Brave/Zipkin spans  :9411"| TEMPO
+    SB -->|"Zipkin spans :9411"| TEMPO
     GRAF -->|query| PROM
     GRAF -->|query| LOKI
     GRAF -->|query| TEMPO
-
-    QS -->|"Playwright E2E  :80"| NGINX
-    QS -->|"k6 API tests  :8080"| SB
-
+    QS -->|"Playwright E2E :80"| NGINX
+    QS -->|"k6 API tests :8080"| SB
     DH -.->|"docker pull"| SB
     DH -.->|"docker pull"| NGINX
+
+    style FETier fill:#E3F2FD,stroke:#1565C0
+    style BETier fill:#E8F5E9,stroke:#1B5E20
+    style DataTier fill:#FCE4EC,stroke:#880E4F
+    style ObsTier fill:#FFF3E0,stroke:#E65100
 ```
 
 ---
 
 ## 2. Backend Service Architecture
 
-All controllers grouped by domain, wired through security and resilience layers into service groups, down to data stores and external APIs.
+Controllers route through JWT security and AOP resilience into domain service groups, down to data stores and external APIs.
 
 ```mermaid
 graph TB
-    subgraph SecurityLayer["Security Layer"]
-        JWT["JwtAuthFilter\n+ AuthService\n+ UserDetailsService"]
+    classDef security fill:#B71C1C,stroke:#7F0000,color:#fff
+    classDef controller fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef resilience fill:#E65100,stroke:#BF360C,color:#fff
+    classDef trading fill:#00695C,stroke:#004D40,color:#fff
+    classDef market fill:#2E7D32,stroke:#1B5E20,color:#fff
+    classDef analytics fill:#4527A0,stroke:#311B92,color:#fff
+    classDef datastore fill:#37474F,stroke:#263238,color:#fff
+    classDef external fill:#6A1B9A,stroke:#4A148C,color:#fff
+
+    subgraph SecurityLayer["🔒 Security Layer"]
+        JWT["🔐 JwtAuthFilter\n+ AuthService\n+ UserDetailsService"]:::security
     end
 
-    subgraph Controllers["REST API Controllers  (:8080/api)"]
+    subgraph Controllers["🎮 REST Controllers  (:8080/api)"]
         direction LR
-        C1["AuthController\n/auth"]
-        C2["PortfolioController\n/portfolio"]
-        C3["TradeController\n/trades"]
-        C4["MarketController\n/market"]
-        C5["StockController\n/stocks"]
-        C6["PredictionController\n/predictions"]
-        C7["TrendController\n/trends"]
-        C8["SwingTradeController\n/swing"]
-        C9["SuggestedTradesController\n/suggested"]
-        C10["ClientController\n/clients"]
-        C11["ImportController\n/import"]
-        C12["*AdminControllers\n/admin/*"]
+        C2["📊 PortfolioController\n/portfolio"]:::controller
+        C3["💹 TradeController\n/trades"]:::controller
+        C4["📈 MarketController\n/market"]:::controller
+        C5["📉 StockController\n/stocks"]:::controller
+        C6["🔮 PredictionController\n/predictions"]:::controller
+        C7["📡 TrendController\n/trends"]:::controller
+        C8["🌊 SwingTradeController\n/swing"]:::controller
+        C9["💡 SuggestedTradesController\n/suggested"]:::controller
+        C10["👤 ClientController\n/clients"]:::controller
+        C11["📂 ImportController\n/import"]:::controller
+        C12["⚙️ AdminControllers\n/admin/*"]:::controller
     end
 
-    subgraph ResilienceLayer["Resilience  (AOP)"]
-        RA["ResilienceAspect\n@Around annotated endpoints"]
-        TR["DynamicThrottleRegistry\nconfig/throttle-config.yaml\nper-user rate limits"]
+    subgraph ResilienceLayer["🛡️ Resilience  (AOP)"]
+        RA{{"🛡️ ResilienceAspect\n@Around endpoints"}}:::resilience
+        TR["DynamicThrottleRegistry\nthrottle-config.yaml\nper-user TPS limits"]:::resilience
     end
 
-    subgraph TradingCore["Trading Core"]
-        TS["TradeService\n+ LimitOrderScheduler"]
-        PS["PortfolioService\n+ AccountService"]
-        FD["FraudDetectionService"]
-        RE["RuleEngineService\nDrools .drl rules"]
-        RS["ReconciliationService"]
-        AU["AuditService\nAuditLog table"]
-        CS["ClientService"]
+    subgraph TradingCore["💹 Trading Core"]
+        TS["💹 TradeService\n+ LimitOrderScheduler"]:::trading
+        PS["📊 PortfolioService\n+ AccountService"]:::trading
+        FD["🚨 FraudDetectionService"]:::trading
+        RE["⚖️ RuleEngineService\nDrools .drl rules"]:::trading
+        RS["🔄 ReconciliationService"]:::trading
+        AU["📝 AuditService"]:::trading
+        CS["👤 ClientService"]:::trading
     end
 
-    subgraph MarketData["Market & Price Data"]
-        MS["MarketService\nIndices cache 1 min"]
-        SS["StockPriceService"]
-        YC["RealYahooFinanceClient\nin-mem cache 5 min\n4-endpoint cascade\nv7→v8(1d)→v6→v8(query2)"]
-        MD["StockMarketDataService\nCSV cache 60 min\n5-min OHLCV bars"]
-        OD["OptionsDataService\ncache 30 min\nATM IV · PCR · Max Pain"]
+    subgraph MarketData["📡 Market & Price Data"]
+        MS["📈 MarketService\nIndices cache 1 min"]:::market
+        SS["💲 StockPriceService"]:::market
+        YC["☁️ RealYahooFinanceClient\nin-mem cache 5 min\nv7→v8(1d)→v6→v8(query2)"]:::market
+        MD["📂 StockMarketDataService\nCSV cache 60 min · 5-min bars"]:::market
+        OD["📊 OptionsDataService\ncache 30 min\nATM IV · PCR · Max Pain"]:::market
     end
 
-    subgraph Analytics["Analytics & Predictions"]
-        TA["TrendAnalysisService\nTrendAnalysisBatchService"]
-        PP["StockPricePredictionBatchService\n+ PredictionScoringService"]
-        SW["SwingTradeService\n+ SwingTradeTrackingService\n+ SwingTradeStrategyService\n+ AtrService"]
-        SG["SuggestedTradesService\n+ SuggestedTradeTrackingService"]
-        TRS["TradingRulesService"]
+    subgraph Analytics["📈 Analytics & Predictions"]
+        TA["📡 TrendAnalysisBatchService\n7 techniques · adaptive weights"]:::analytics
+        PP["🔮 PredictionBatchService\n+ PredictionScoringService"]:::analytics
+        SW["🌊 SwingTradeService\n+ AtrService"]:::analytics
+        SG["💡 SuggestedTradesService"]:::analytics
     end
 
-    subgraph DataLayer["Data Layer"]
-        PG["PostgreSQL 16\nstockdb\n(21+ JPA Repositories)"]
-        RD["Redis 7\nSpring @Cacheable"]
-        FS["CSV Files\nstock_predictions/\ntrend_predictions/"]
-        YF["Yahoo Finance API\n(external HTTPS)"]
+    subgraph DataLayer["💾 Data Layer"]
+        PG[("🐘 PostgreSQL 16\n21+ JPA Repositories")]:::datastore
+        RD[("⚡ Redis 7\nSpring @Cacheable")]:::datastore
+        FS[("📁 CSV Files\nstock_predictions/\ntrend_predictions/")]:::datastore
+        YF(["☁️ Yahoo Finance\n(external HTTPS)"]):::external
     end
 
     JWT --> C2 & C3 & C4 & C5 & C6 & C7 & C8 & C9 & C10
-
     C3 --> RA --> TS
     C2 --> PS
     C4 --> MS
@@ -138,22 +165,18 @@ graph TB
     C8 --> SW
     C9 --> SG
     C10 --> CS
-
     TS --> FD --> RE
     TS --> PS & AU & RS
-
     PS --> SS
     MS --> YC
     SS --> YC
     MD --> YC
     OD --> YC
     YC --> YF
-
     TA --> MD & OD & MS
     PP --> MD & SS & FS
     SW --> MD & TA
-    SG --> TA & TRS
-
+    SG --> TA
     TS --> PG
     PS --> PG & RD
     CS --> PG & RD
@@ -162,75 +185,89 @@ graph TB
     SW --> PG
     AU --> PG
     RS --> PG
+
+    style SecurityLayer fill:#FFEBEE,stroke:#B71C1C
+    style Controllers fill:#E3F2FD,stroke:#1565C0
+    style ResilienceLayer fill:#FFF3E0,stroke:#E65100
+    style TradingCore fill:#E0F2F1,stroke:#00695C
+    style MarketData fill:#E8F5E9,stroke:#2E7D32
+    style Analytics fill:#EDE7F6,stroke:#4527A0
+    style DataLayer fill:#ECEFF1,stroke:#37474F
 ```
 
 ---
 
 ## 3. Real-time Data Flow (User-triggered)
 
-End-to-end flows for the four main user interactions, with cache hit/miss decision points and TTL labels.
+End-to-end flows with cache decision points (diamonds), TTL labels, success/error outcomes.
 
 ```mermaid
 flowchart TD
-    User(["User / Browser"])
+    classDef user fill:#0D47A1,stroke:#01579B,color:#fff
+    classDef controller fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef service fill:#2E7D32,stroke:#1B5E20,color:#fff
+    classDef decision fill:#E65100,stroke:#BF360C,color:#fff
+    classDef db fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef external fill:#6A1B9A,stroke:#4A148C,color:#fff
+    classDef success fill:#1B5E20,stroke:#004D40,color:#fff
+    classDef error fill:#B71C1C,stroke:#7F0000,color:#fff
 
-    subgraph PortfolioFlow["Portfolio Load  GET /api/portfolio/client/{id}/summary"]
-        PF1["PortfolioController"]
-        PF2["PortfolioService\nconvertToResponse()"]
-        PF3{"Redis cache\nhit?"}
-        PF4["PostgreSQL\nload holdings"]
-        PF5{"Price cache\nhit?  TTL 5 min"}
-        PF6["YahooFinanceClient\nGET v7/quote\n→ v8/chart 1d fallbacks"]
-        PF7{"Post-market\nwindow?  4-8 PM ET"}
-        PF8["YahooFinanceClient\nGET v8/chart 1m\n(walk back timestamps)"]
-        PF9["Return portfolio\nwith prices + P&L\n+ postMarketPrice"]
+    User(["🌐 User / Browser"]):::user
+
+    subgraph PortfolioFlow["📊 Portfolio Load  GET /api/portfolio/client/{id}/summary"]
+        PF1["🎮 PortfolioController"]:::controller
+        PF2["📊 PortfolioService\nconvertToResponse()"]:::service
+        PF3{"⚡ Redis cache\nhit?"}:::decision
+        PF4[("🐘 PostgreSQL\nload holdings")]:::db
+        PF5{"⏱️ Price cache\nhit?  TTL 5 min"}:::decision
+        PF6["☁️ YahooFinanceClient\nGET v7/quote\n→ v8/chart 1d fallbacks"]:::external
+        PF7{"🌙 Post-market\nwindow?\n4–8 PM ET"}:::decision
+        PF8["☁️ YahooFinanceClient\nGET v8/chart 1m\nwalk back timestamps"]:::external
+        PF9["✅ Portfolio + prices\nP&L + postMarketPrice"]:::success
     end
 
-    subgraph TradeFlow["Place Trade  POST /api/trades"]
-        TF1["TradeController"]
-        TF2["ResilienceAspect\nthrottle-config.yaml\nrate-limit check"]
-        TF3["TradeService\nexecuteTrade()"]
-        TF4["FraudDetection\n+ Drools rules eval"]
-        TF5{"Rules\npassed?"}
-        TF6["PortfolioService\ndebit/credit cash"]
-        TF7["AuditService\nwrite AuditLog"]
-        TF8["ReconciliationService\nbalance check"]
-        TF9X["Reject trade\n403 / error"]
-        TF9["Trade persisted\nPostgreSQL → Redis evict"]
+    subgraph TradeFlow["💹 Place Trade  POST /api/trades"]
+        TF1["🎮 TradeController"]:::controller
+        TF2{{"🛡️ ResilienceAspect\nrate-limit check"}}:::decision
+        TF3["💹 TradeService\nexecuteTrade()"]:::service
+        TF4["🚨 FraudDetection\n+ Drools rules eval"]:::service
+        TF5{"⚖️ Rules\npassed?"}:::decision
+        TF6["📊 PortfolioService\ndebit / credit cash"]:::service
+        TF7["📝 AuditService\nwrite AuditLog"]:::service
+        TF8["🔄 ReconciliationService\nbalance check"]:::service
+        TF9X["❌ Reject trade\n403 / error"]:::error
+        TF9["✅ Trade persisted\nPostgreSQL → Redis evict"]:::success
     end
 
-    subgraph MarketFlow["Market Indices  GET /api/market/indices"]
-        MF1["MarketController"]
-        MF2{"Indices cache\nhit?  TTL 1 min"}
-        MF3["MarketService\nfetchIndexQuote()"]
-        MF4["YahooFinanceClient\nGET v8/chart 1d  ×5 symbols"]
-        MF5["getPostMarketPrice()\nv8/chart 1m  ×5 symbols"]
-        MF6["Return ^GSPC ^DJI ^IXIC GC=F ^RUT\nwith price + postMarketPrice"]
+    subgraph MarketFlow["📈 Market Indices  GET /api/market/indices"]
+        MF1["🎮 MarketController"]:::controller
+        MF2{"⏱️ Indices cache\nhit?  TTL 1 min"}:::decision
+        MF3["📈 MarketService\nfetchIndexQuote()"]:::service
+        MF4["☁️ YahooFinanceClient\nGET v8/chart 1d  ×5 symbols"]:::external
+        MF5["☁️ getPostMarketPrice()\nv8/chart 1m  ×5 symbols"]:::external
+        MF6["✅ ^GSPC ^DJI ^IXIC\nGC=F ^RUT + postMarket"]:::success
     end
 
-    subgraph PredictFlow["Price Prediction  GET /api/predictions/{sym}"]
-        PR1["PredictionController"]
-        PR2{"DB fresh?\n< 50 min old"}
-        PR3["PostgreSQL\nstock_price_prediction table"]
-        PR4["Return 8-hour\nhourly forecast array"]
+    subgraph PredictFlow["🔮 Price Prediction  GET /api/predictions/{sym}"]
+        PR1["🎮 PredictionController"]:::controller
+        PR2{"⏱️ DB record\nfresh?  < 50 min"}:::decision
+        PR3[("🐘 PostgreSQL\nstock_price_prediction")]:::db
+        PR4["✅ 8-hour hourly\nforecast array"]:::success
     end
 
     User -->|"load dashboard"| PF1
     PF1 --> PF2 --> PF3
-    PF3 -->|"MISS"| PF4
     PF3 -->|"HIT"| PF9
-    PF4 --> PF5
+    PF3 -->|"MISS"| PF4 --> PF5
     PF5 -->|"HIT"| PF9
-    PF5 -->|"MISS"| PF6
-    PF6 --> PF7
+    PF5 -->|"MISS"| PF6 --> PF7
     PF7 -->|"YES"| PF8 --> PF9
     PF7 -->|"NO"| PF9
 
     User -->|"buy / sell"| TF1
     TF1 --> TF2
     TF2 -->|"rate-limited"| TF9X
-    TF2 -->|"allowed"| TF3
-    TF3 --> TF4 --> TF5
+    TF2 -->|"allowed"| TF3 --> TF4 --> TF5
     TF5 -->|"FAIL"| TF9X
     TF5 -->|"PASS"| TF6 --> TF7 --> TF8 --> TF9
 
@@ -242,59 +279,63 @@ flowchart TD
     User -->|"open prediction chart"| PR1
     PR1 --> PR2
     PR2 -->|"FRESH"| PR3 --> PR4
-    PR2 -->|"STALE → wait for\nnext hourly batch"| PR4
+    PR2 -->|"STALE"| PR4
 ```
 
 ---
 
 ## 4. Scheduled Batch Processing Pipeline
 
-All 9 schedulers grouped by frequency, showing what Yahoo Finance endpoints they call and where they write output.
+All 9 schedulers grouped by frequency, color-coded by cadence, showing Yahoo endpoints and persistence targets.
 
 ```mermaid
 flowchart LR
-    YF(["Yahoo Finance API"])
-    PG(["PostgreSQL"])
-    FS(["CSV Files\nstock_predictions/\ntrend_predictions/"])
+    classDef external fill:#6A1B9A,stroke:#4A148C,color:#fff
+    classDef db fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef csv fill:#E65100,stroke:#BF360C,color:#fff
 
-    subgraph Every1min["Every  1 min"]
-        R1["ReconciliationService\nreconcileAllPortfolios()\nVerify cash + holding balances\nFix discrepancies in DB"]
-        HB["SystemHeartbeatService\nwrite timestamp\nto system_heartbeat table"]
+    YF(["☁️ Yahoo Finance API"]):::external
+    PG[("🐘 PostgreSQL")]:::db
+    FS[("📁 CSV Files\nstock_predictions/\ntrend_predictions/")]:::csv
+
+    subgraph Every1min["⏱️ Every 1 min"]
+        R1["🔄 ReconciliationService\nVerify cash + holding balances\nFix discrepancies in DB"]
+        HB["💓 SystemHeartbeatService\nWrite timestamp to heartbeat table"]
     end
 
-    subgraph Every5min["Every  5 min"]
-        LO["LimitOrderScheduler\ncheckAndExecuteLimitOrders()\nScan open limit orders\nExecute if price crossed trigger\n→ TradeService.executeTrade()"]
+    subgraph Every5min["⏱️ Every 5 min"]
+        LO["📋 LimitOrderScheduler\nScan open limit orders\nExecute if price crossed trigger\n→ TradeService.executeTrade()"]
     end
 
-    subgraph Every10min["Every  10 min  (+10 s startup)"]
-        TA["TrendAnalysisBatchService\nrunTrendAnalysis()\nFor each tracked symbol:\n  7 techniques: MA/RSI/MACD/\n  Momentum/Volume/\n  IndexMomentum/OptionsSentiment\nWeighted vote → BULLISH/BEARISH/NEUTRAL\nAdaptive weight update\nSave to PostgreSQL + CSV"]
+    subgraph Every10min["⏱️ Every 10 min  (+10 s startup)"]
+        TA["📡 TrendAnalysisBatchService\nFor each symbol:\n  MA / RSI / MACD / Momentum\n  Volume / IndexMomentum / OptionsSentiment\nWeighted vote → BULLISH/BEARISH/NEUTRAL\nAdaptive weight update"]
     end
 
-    subgraph Every1hr["Every  1 hour  (+30 s startup)"]
-        PP1["StockPricePredictionBatchService\ngeneratePredictions()\nFor each symbol:\n  Fetch 5-min bars (CSV or Yahoo)\n  ARIMA + weighted features\n  Generate 8h × hourly forecast\n  Save to stock_price_prediction table"]
-        PP2["resolveActuals()\n  Compare past predictions vs actual price\n  Calculate accuracy score\n  Update StockPredictionWeight\n  (adaptive learning)"]
+    subgraph Every1hr["⏱️ Every 1 hour  (+30 s startup)"]
+        PP1["🔮 PredictionBatchService\ngeneratePredictions()\n  Fetch 5-min bars\n  ARIMA + weighted features\n  8h hourly forecast → DB"]
+        PP2["🎯 resolveActuals()\n  Compare predictions vs actual\n  Update StockPredictionWeight\n  (adaptive learning)"]
     end
 
-    subgraph Daily2AM["Daily  2:00 AM  ET"]
-        DS["DataSyncBatchService\nsyncHistoricalPrices()\nFetch 60-day 1d bars for all symbols\nUpsert into PostgreSQL\n(StockPriceCache table)"]
+    subgraph Daily2AM["🌙 Daily  2:00 AM  ET"]
+        DS["📡 DataSyncBatchService\nFetch 60-day daily bars  ×all symbols\nUpsert into StockPriceCache table"]
     end
 
-    subgraph Daily6AM["Daily  6:00 AM"]
-        SG["SuggestedTradeTrackingService\ncheckPendingSuggestions()\nEvaluate open trade suggestions\nvs current price / trend\nUpdate status in DB"]
+    subgraph Daily6AM["🌅 Daily  6:00 AM"]
+        SG["💡 SuggestedTradeTrackingService\nEvaluate open trade suggestions\nvs current price / trend"]
     end
 
-    subgraph Daily630AM["Daily  6:30 AM"]
-        SW["SwingTradeTrackingService\ncheckSwingTradeOutcomes()\nEvaluate open swing predictions\nvs actual price movement\nUpdate weights + P&L in DB"]
+    subgraph Daily630AM["🌅 Daily  6:30 AM"]
+        SW["🌊 SwingTradeTrackingService\nEvaluate swing predictions\nvs actual price movement\nUpdate weights + P&L"]
     end
 
-    subgraph Daily6PM["Daily  6:00 PM  ET  (weekdays)"]
-        SC["PredictionScoringService\nscoreYesterdaysPredictions()\nFetch yesterday's predictions\nCompare vs closing prices\nCompute MAE / direction accuracy\nSave PredictionDailyScore"]
+    subgraph Daily6PM["🌆 Daily  6:00 PM  ET  (weekdays)"]
+        SC["🎯 PredictionScoringService\nCompare predictions vs closing\nCompute MAE / direction accuracy\nSave PredictionDailyScore"]
     end
 
-    YF -->|"v8/chart 5m 60d  ×N symbols"| TA
-    YF -->|"v8/chart 5m 60d + current price"| PP1
-    YF -->|"v8/chart 1d  ×all symbols"| DS
-    YF -->|"current price per symbol"| LO
+    YF -->|"v8/chart 5m 60d ×N"| TA
+    YF -->|"v8/chart 5m 60d + price"| PP1
+    YF -->|"v8/chart 1d ×all symbols"| DS
+    YF -->|"current price ×symbols"| LO
 
     TA --> PG
     TA --> FS
@@ -308,54 +349,230 @@ flowchart LR
     R1 --> PG
     HB --> PG
     LO --> PG
+
+    style Every1min fill:#E8F5E9,stroke:#2E7D32
+    style Every5min fill:#E3F2FD,stroke:#1565C0
+    style Every10min fill:#FFF3E0,stroke:#E65100
+    style Every1hr fill:#EDE7F6,stroke:#4527A0
+    style Daily2AM fill:#E8EAF6,stroke:#283593
+    style Daily6AM fill:#FFF8E1,stroke:#FF8F00
+    style Daily630AM fill:#FFF8E1,stroke:#FF8F00
+    style Daily6PM fill:#FCE4EC,stroke:#880E4F
 ```
 
 ---
 
 ## 5. Observability & Monitoring Stack
 
-Three signal pipelines (metrics, logs, traces) converging into Grafana, plus the quality scheduler for automated testing.
+Three signal pipelines (metrics → Prometheus, logs → Loki, traces → Tempo) all converging into Grafana.
 
 ```mermaid
-graph TB
-    subgraph App["Application (Spring Boot)"]
-        ACT["Actuator\n/actuator/prometheus\n/actuator/health\n/actuator/info"]
-        BRAVE["Brave Tracer\n(spring-cloud-sleuth)\nHTTP span instrumentation"]
-        LOG["Logback JSON\nlogs/ directory\n(stock-brokerage.json\nbatch-runs.txt)"]
-        METER["Micrometer\nCustom metrics:\ntrades_executed_total\nportfolio_value_gauge\napi_request_duration"]
+graph LR
+    subgraph App["🌿 Spring Boot Application"]
+        METER["📊 Micrometer\ntrades_executed_total\nportfolio_value_gauge\napi_request_duration"]
+        ACT["⚙️ Actuator\n/actuator/prometheus\n/actuator/health"]
+        BRAVE["🔮 Brave Tracer\nHTTP span instrumentation"]
+        LOG["📋 Logback JSON\nlogs/stock-brokerage.json\nlogs/batch-runs.txt"]
     end
 
-    subgraph MetricsPipeline["Metrics Pipeline"]
-        PROM["Prometheus\n:9090\nScrapes every 15 s\nRetention: 15 days\nRules: alerting.yml"]
+    subgraph MetricsPipeline["📊 Metrics Pipeline"]
+        PROM["🔥 Prometheus\n:9090\nScrape every 15 s\nRetention 15 days"]
     end
 
-    subgraph LogPipeline["Log Pipeline"]
-        PT["Promtail\npromtail/config.yml\nTails logs/ directory\nAdds labels: job, instance"]
-        LOKI["Loki\n:3100\nLog aggregation\nLabel-based indexing"]
+    subgraph LogPipeline["📋 Log Pipeline"]
+        PT["Promtail\ntail logs/ · add labels"]
+        LOKI["📋 Loki  :3100\nLabel-based indexing"]
     end
 
-    subgraph TracePipeline["Trace Pipeline"]
-        TEMPO["Tempo\n:9411  Zipkin receiver\n:3200  HTTP API\nTrace storage + search"]
+    subgraph TracePipeline["🔮 Trace Pipeline"]
+        TEMPO["🔮 Tempo\n:9411 Zipkin receiver\n:3200 HTTP API"]
     end
 
-    subgraph Visualization["Visualization"]
-        GRAF["Grafana\n:3000\nDashboards:\n• JVM / Spring metrics\n• Trade activity\n• Prediction accuracy\n• System health"]
-    end
+    GRAF["📊 Grafana  :3000\nMetrics · Logs · Traces\nJVM · Trades · Predictions"]
 
     METER --> ACT
-    ACT -->|"GET /actuator/prometheus\nevery 15 s"| PROM
-    BRAVE -->|"Zipkin spans POST :9411"| TEMPO
-    LOG -->|"tail file"| PT
-    PT -->|"Loki remote write\nHTTP :3100"| LOKI
+    ACT -->|"GET /actuator/prometheus  every 15 s"| PROM
+    LOG -->|"tail"| PT
+    PT -->|"Loki push  :3100"| LOKI
+    BRAVE -->|"Zipkin spans  POST :9411"| TEMPO
 
-    PROM --> GRAF
-    LOKI --> GRAF
-    TEMPO --> GRAF
+    PROM -->|"PromQL"| GRAF
+    LOKI -->|"LogQL"| GRAF
+    TEMPO -->|"TraceQL"| GRAF
 
-    PROM -.->|"Alertmanager\n(if configured)"| ALERT["Alerts\n(email / Slack)"]
+    PROM -.->|"Alertmanager (optional)"| ALERT(["🚨 Alerts\nemail / Slack"])
 
-    style GRAF fill:#f46800,color:#fff
-    style PROM fill:#e6522c,color:#fff
-    style LOKI fill:#f5a623,color:#000
-    style TEMPO fill:#7b61ff,color:#fff
+    style App fill:#E8F5E9,stroke:#2E7D32
+    style MetricsPipeline fill:#FBE9E7,stroke:#BF360C
+    style LogPipeline fill:#FFF8E1,stroke:#FF8F00
+    style TracePipeline fill:#EDE7F6,stroke:#4527A0
+    style GRAF fill:#f46800,color:#fff,stroke:#e65100
+    style PROM fill:#e6522c,color:#fff,stroke:#bf360c
+    style LOKI fill:#f5a623,color:#000,stroke:#e65100
+    style TEMPO fill:#7b61ff,color:#fff,stroke:#4527A0
+```
+
+---
+
+## 6. Client / Investor Use Cases
+
+All actions available to a logged-in retail investor.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#E3F2FD", "primaryBorderColor": "#1565C0", "tertiaryColor": "#fff"}}}%%
+graph LR
+    actor1(["👤 Client\n(Investor)"])
+
+    subgraph Authentication["🔒 Authentication"]
+        UC1["Register / Login"]
+        UC2["JWT token refresh"]
+    end
+
+    subgraph Portfolio["📊 Portfolio Management"]
+        UC3["View portfolio summary\n(prices + P&L + post-market)"]
+        UC4["View account balance\n& cash position"]
+        UC5["Download holdings CSV"]
+        UC6["Import holdings from\nSchwab CSV"]
+    end
+
+    subgraph Trading["💹 Trading"]
+        UC7["Place market order\n(buy / sell)"]
+        UC8["Place limit order\n(trigger price)"]
+        UC9["View trade history"]
+        UC10["Cancel pending\nlimit order"]
+    end
+
+    subgraph MarketInfo["📈 Market Information"]
+        UC11["View market indices\n(^GSPC ^DJI ^IXIC GC=F ^RUT)"]
+        UC12["View real-time\nstock price"]
+        UC13["View post-market price\n(4 PM – 8 PM ET)"]
+    end
+
+    subgraph Intelligence["🔮 Predictive Intelligence"]
+        UC14["View 8-hour price\nforecast popup"]
+        UC15["View trend direction\n(BULLISH/BEARISH/NEUTRAL)"]
+        UC16["View swing trade\nsuggestions"]
+        UC17["View options data\n(ATM IV · PCR · Max Pain)"]
+    end
+
+    actor1 --> UC1 & UC2
+    actor1 --> UC3 & UC4 & UC5 & UC6
+    actor1 --> UC7 & UC8 & UC9 & UC10
+    actor1 --> UC11 & UC12 & UC13
+    actor1 --> UC14 & UC15 & UC16 & UC17
+
+    style Authentication fill:#FFEBEE,stroke:#B71C1C
+    style Portfolio fill:#E3F2FD,stroke:#1565C0
+    style Trading fill:#E8F5E9,stroke:#2E7D32
+    style MarketInfo fill:#FFF3E0,stroke:#E65100
+    style Intelligence fill:#EDE7F6,stroke:#4527A0
+```
+
+---
+
+## 7. Admin Use Cases
+
+Actions available exclusively to system administrators.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#E8F5E9", "primaryBorderColor": "#2E7D32"}}}%%
+graph LR
+    actor2(["🛡️ System\nAdministrator"])
+
+    subgraph ClientAdmin["👤 Client Administration"]
+        A1["Create / update\nclient accounts"]
+        A2["View all clients\n& portfolios"]
+        A3["Adjust cash balance\n(manual credit/debit)"]
+        A4["Force portfolio\nreconciliation"]
+    end
+
+    subgraph TradeAdmin["💹 Trade Administration"]
+        A5["View all trades\nacross all clients"]
+        A6["Override / cancel\nany trade"]
+        A7["View audit log\n(all events)"]
+    end
+
+    subgraph RuleAdmin["⚖️ Rule Engine"]
+        A8["Create / update trading\nrules (Drools)"]
+        A9["Set per-client\nrisk rules"]
+        A10["Enable / disable rules\nwithout restart"]
+    end
+
+    subgraph JobAdmin["⚙️ Job Administration"]
+        A11["View job execution\nrecords + status"]
+        A12["Trigger manual\nbatch run"]
+        A13["View DB backup\nstatus / trigger"]
+    end
+
+    subgraph ResilienceAdmin["🛡️ Resilience"]
+        A14["View resilience /\ncircuit-breaker status"]
+        A15["Reload throttle\nconfig (hot-reload)"]
+    end
+
+    actor2 --> A1 & A2 & A3 & A4
+    actor2 --> A5 & A6 & A7
+    actor2 --> A8 & A9 & A10
+    actor2 --> A11 & A12 & A13
+    actor2 --> A14 & A15
+
+    style ClientAdmin fill:#E3F2FD,stroke:#1565C0
+    style TradeAdmin fill:#E8F5E9,stroke:#2E7D32
+    style RuleAdmin fill:#FFF3E0,stroke:#E65100
+    style JobAdmin fill:#EDE7F6,stroke:#4527A0
+    style ResilienceAdmin fill:#FFEBEE,stroke:#B71C1C
+```
+
+---
+
+## 8. System Scheduler Use Cases
+
+Automated use cases performed by the Spring `@Scheduled` subsystem with no human interaction.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#EDE7F6", "primaryBorderColor": "#4527A0"}}}%%
+graph TB
+    actor3(["⏰ System Scheduler\n(Spring @Scheduled)"])
+
+    subgraph HighFreq["⚡ High-frequency  (1–5 min)"]
+        S1["Reconcile all portfolio\nand cash balances  every 1 min"]
+        S2["Write system heartbeat\nto DB  every 1 min"]
+        S3["Execute triggered\nlimit orders  every 5 min"]
+    end
+
+    subgraph MedFreq["🔄 Medium-frequency  (10 min – 1 hr)"]
+        S4["Run 7-technique trend analysis\nfor all symbols  every 10 min"]
+        S5["Generate 8-hour price\nforecasts  every 1 hour"]
+        S6["Resolve prediction actuals\n& update weights  every 1 hour"]
+    end
+
+    subgraph DailyJobs["📅 Daily Jobs"]
+        S7["Sync 60-day OHLCV bars\nfrom Yahoo Finance  2:00 AM"]
+        S8["Evaluate pending\ntrade suggestions  6:00 AM"]
+        S9["Evaluate swing trade\noutcomes + P&L  6:30 AM"]
+        S10["Score yesterday's price\npredictions (MAE)  6:00 PM weekdays"]
+    end
+
+    subgraph Outputs["💾 Outputs"]
+        O1[("🐘 PostgreSQL\n(persistent state)")]
+        O2[("📁 CSV Files\nweights + predictions")]
+        O3[("☁️ Yahoo Finance\n(read-only API calls)")]
+    end
+
+    actor3 --> S1 & S2 & S3
+    actor3 --> S4 & S5 & S6
+    actor3 --> S7 & S8 & S9 & S10
+
+    S1 & S2 & S3 --> O1
+    S4 --> O1 & O2
+    S5 --> O1 & O2
+    S6 --> O1
+    S7 --> O1
+    S8 & S9 & S10 --> O1
+
+    S3 & S4 & S5 & S7 --> O3
+
+    style HighFreq fill:#E8F5E9,stroke:#2E7D32
+    style MedFreq fill:#EDE7F6,stroke:#4527A0
+    style DailyJobs fill:#FFF3E0,stroke:#E65100
+    style Outputs fill:#ECEFF1,stroke:#37474F
 ```
