@@ -73,3 +73,4 @@ ssl/
 
 # Ad-hoc test output files
 test-results.txt
+mvn-test-output.txt
