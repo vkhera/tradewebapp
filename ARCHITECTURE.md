@@ -1,6 +1,6 @@
 # Architecture Diagrams
 
-Eight diagrams: deployment topology, service architecture, real-time data flow, scheduled batch processing, observability stack, and use cases for clients, admins, and the automated scheduler.
+Eleven diagrams and models: deployment topology, service architecture, real-time data flow, scheduled batch processing, observability stack, use cases for clients, admins, and the automated scheduler, plus a security architecture view, a STRIDE threat model, and a data-classification security matrix.
 
 ## Table of Contents
 
@@ -12,6 +12,9 @@ Eight diagrams: deployment topology, service architecture, real-time data flow, 
 6. [Client / Investor Use Cases](#6-client--investor-use-cases)
 7. [Admin Use Cases](#7-admin-use-cases)
 8. [System Scheduler Use Cases](#8-system-scheduler-use-cases)
+9. [Security Architecture Diagram](#9-security-architecture-diagram)
+10. [Threat Model (STRIDE)](#10-threat-model-stride)
+11. [Data Classification & Encryption Controls](#11-data-classification--encryption-controls)
 
 ---
 
@@ -576,3 +579,133 @@ graph TB
     style DailyJobs fill:#FFF3E0,stroke:#E65100
     style Outputs fill:#ECEFF1,stroke:#37474F
 ```
+
+---
+
+## 9. Security Architecture Diagram
+
+Trust boundaries, authN/authZ checkpoints, and data-protection controls across the full request path.
+
+```mermaid
+flowchart LR
+    classDef edge fill:#0D47A1,stroke:#01579B,color:#fff
+    classDef app fill:#2E7D32,stroke:#1B5E20,color:#fff
+    classDef sec fill:#B71C1C,stroke:#7F0000,color:#fff
+    classDef data fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef ext fill:#6A1B9A,stroke:#4A148C,color:#fff
+    classDef obs fill:#E65100,stroke:#BF360C,color:#fff
+
+    User(["User Browser\nJWT client"]):::edge
+    Internet(["Public Internet"]):::edge
+
+    subgraph DMZ["Trust Boundary A: Edge / DMZ"]
+        NGINX["Nginx\nTLS termination :443\nHTTP->HTTPS redirect\nsecurity headers"]:::sec
+    end
+
+    subgraph AppZone["Trust Boundary B: Application Zone (private docker network)"]
+        JWT["JwtAuthFilter\nToken validation\nrole extraction"]:::sec
+        CTRL["REST Controllers\n/api/**"]:::app
+        RES["ResilienceAspect\nthrottle + abuse control"]:::sec
+        SVC["Domain Services\ntrades, portfolio, market, prediction"]:::app
+    end
+
+    subgraph DataZone["Trust Boundary C: Data Zone"]
+        PG[("PostgreSQL\nPII + financial state\nJPA parameterized queries")]:::data
+        RD[("Redis\ncache/session-like data\nTTL + key scoping")]:::data
+        FS[("CSV prediction artifacts\nleast-write paths")]:::data
+    end
+
+    subgraph ExternalZone["Trust Boundary D: External Services"]
+        YF(["Yahoo Finance API\nHTTPS outbound only"]):::ext
+    end
+
+    subgraph ObsZone["Trust Boundary E: Observability"]
+        PROM["Prometheus\nmetrics scrape"]:::obs
+        LOKI["Loki\nstructured logs"]:::obs
+        TEMPO["Tempo\ntraces"]:::obs
+        GRAF["Grafana\nRBAC dashboards"]:::obs
+    end
+
+    User -->|HTTPS| Internet --> NGINX
+    NGINX -->|/api/** only| JWT --> CTRL --> RES --> SVC
+    SVC --> PG
+    SVC --> RD
+    SVC --> FS
+    SVC -->|egress allowlist + TLS| YF
+
+    SVC -->|/actuator/prometheus| PROM
+    SVC -->|JSON logs| LOKI
+    SVC -->|Zipkin spans| TEMPO
+    PROM --> GRAF
+    LOKI --> GRAF
+    TEMPO --> GRAF
+```
+
+Security control map:
+
+- Edge: TLS at Nginx, redirect cleartext to TLS, minimal exposed ports.
+- Identity: JWT validation at filter layer before controller access; role-based endpoint protection.
+- Abuse resistance: dynamic throttling and resilience aspect to limit excessive or burst traffic.
+- Data protection: least-privilege DB credentials, cache TTL boundaries, and scoped persistence for artifacts.
+- Egress hardening: outbound API calls only to known finance endpoints over HTTPS.
+- Auditability: centralized logs, metrics, and traces for forensics and anomaly detection.
+
+---
+
+## 10. Threat Model (STRIDE)
+
+Scope: browser -> nginx -> spring boot -> postgres/redis/filesystem -> external APIs and observability stack.
+
+| STRIDE | Threat | Example in this system | Primary mitigations | Detection signals |
+|---|---|---|---|---|
+| Spoofing | Token/session impersonation | Stolen JWT used to call `/api/trades` as another user | Short JWT expiry, strong signing keys, key rotation, role checks per endpoint, optional token jti denylist | Spike in auth failures, geo/IP anomalies, unusual role usage |
+| Tampering | API payload or order manipulation | Modified trade quantity/price in transit or replayed request body | TLS end-to-end at edge, request validation, idempotency keys for trade submission, server-side business validation | Signature/validation errors, duplicate idempotency key collisions |
+| Repudiation | User denies sensitive action | User denies placing a high-value trade | Immutable audit trail with actor id, timestamp, endpoint, request hash; synchronized server time | Gaps in audit events, missing correlation IDs |
+| Information Disclosure | Sensitive data leak | PII/portfolio data exposed via logs, debug endpoints, or misconfigured Grafana | Log redaction, actuator endpoint restrictions, secrets via env/secret store, least-privileged dashboard RBAC | DLP/log scans, unauthorized dashboard access events |
+| Denial of Service | Traffic flood or expensive query abuse | Burst requests to market/prediction endpoints degrade response | Per-user throttling, resilience aspect, cache TTL strategy, connection pool limits, WAF/rate limit at edge | Elevated 429/503 rates, saturation of thread pool/DB pool |
+| Elevation of Privilege | Regular user gains admin capability | JWT claims abused to access `/admin/*` | Strict role-based authorization, deny-by-default route policy, admin endpoint segregation, defense-in-depth checks in service layer | Forbidden-to-success pattern anomalies, admin action alerts |
+
+High-priority abuse cases:
+
+1. Automated credential stuffing against login endpoints.
+2. Trade replay attempts during network retries.
+3. Data exfiltration via overly verbose logs and observability labels.
+4. Resource exhaustion through high-cardinality market/prediction requests.
+
+Recommended verification checklist:
+
+1. Confirm all `/admin/**` paths enforce role checks at both controller and method level.
+2. Confirm actuator endpoints exposed publicly are limited to health/metrics only.
+3. Confirm all security-relevant events include correlation ID and actor ID.
+4. Confirm trade creation path supports idempotency and replay detection.
+5. Confirm dashboards/log queries do not expose raw secrets, tokens, or PII.
+
+---
+
+## 11. Data Classification & Encryption Controls
+
+Classification legend:
+
+- Restricted: highly sensitive user or financial data requiring strict access controls and minimization.
+- Confidential: operational data that can increase attack impact if exposed.
+- Internal: routine telemetry and service metadata for internal operations.
+- Public: intentionally exposed, low-risk information.
+
+| Data asset | Example fields | Classification | At rest controls | In transit controls | Access and retention controls |
+|---|---|---|---|---|---|
+| Identity and auth data | username, password hash, roles, JWT metadata | Restricted | PostgreSQL disk encryption, strong password hashing (Argon2/bcrypt), secret-backed signing keys | HTTPS at edge, internal private network between containers | Least-privileged DB role, rotate signing keys, short token TTL |
+| Client profile and account state | client id, account balance, holdings, portfolio valuation | Restricted | PostgreSQL encryption at rest, backups encrypted, row-level ownership checks in app layer | TLS from browser to nginx, private app/data network | Role-based access checks, strict audit trail, backup retention policy |
+| Trade and order data | order type, symbol, quantity, price, status, timestamps | Restricted | PostgreSQL encryption, immutable audit records, integrity constraints | TLS and signed JWT identity context on each request | Idempotency on create, reconciliation jobs, non-repudiation logging |
+| Market cache data | latest quotes, index snapshots, derived indicators | Confidential | Redis protected in private network, key TTL, no persistence for sensitive keys unless required | Encrypted egress to Yahoo Finance, private network in-cluster | Cache namespace isolation, eviction policy, bounded retention |
+| Prediction artifacts | model outputs, trend scores, weight files, CSV artifacts | Confidential | Encrypted volume/storage for CSV and DB tables, write-limited service account | Internal network only, controlled export paths | Least-write filesystem permissions, scheduled cleanup/versioning |
+| Logs and traces | request ids, endpoint names, error codes, spans | Internal | Loki/Tempo storage encryption, log retention limits | TLS between components where supported, isolated observability network | Redaction for secrets/PII, RBAC in Grafana, alert on sensitive field leakage |
+| Metrics | latency, throughput, error rates, JVM stats | Internal | Prometheus TSDB with protected storage | Scrape endpoints on private network, secured dashboard access | Minimize label cardinality, deny external scrape access |
+| Public API metadata | health/status endpoints intended for availability checks | Public | Minimal stored state | HTTPS only | Expose only non-sensitive data, no debug internals |
+
+Key management and operational guardrails:
+
+1. Store all application secrets and JWT signing material outside source control; inject via environment or secret manager.
+2. Rotate credentials and signing keys on a defined cadence and on incident triggers.
+3. Enforce encryption for backups and verify restore procedures quarterly.
+4. Redact tokens, passwords, account numbers, and PII fields before logs are shipped.
+5. Review role mappings for admin and support users at least monthly.
