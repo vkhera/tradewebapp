@@ -29,6 +29,14 @@ public class StockPriceService {
     public BigDecimal getCurrentPrice(String symbol) {
         return yahooFinanceClient.getCurrentPrice(symbol);
     }
+
+    /**
+     * Fetch the post-market (after-hours) price for the given symbol.
+     * Returns {@code null} when the market is open or post-market data is unavailable.
+     */
+    public BigDecimal getPostMarketPrice(String symbol) {
+        return yahooFinanceClient.getPostMarketPrice(symbol);
+    }
     
     /**
      * Get full quote data for a symbol.

@@ -21,6 +21,13 @@ public interface YahooFinanceClient {
     BigDecimal getCurrentPrice(String symbol);
 
     /**
+     * Fetch the post-market (after-hours) price for the given ticker symbol.
+     * Returns {@code null} when post-market data is unavailable (i.e. during regular
+     * market hours or when the exchange does not report after-hours data).
+     */
+    BigDecimal getPostMarketPrice(String symbol);
+
+    /**
      * Fetch a full quote response for the given ticker symbol.
      * Returns a map with an "error" key when the call fails.
      */
@@ -40,4 +47,18 @@ public interface YahooFinanceClient {
      * Bars are ordered oldest → newest.
      */
     List<DailyBar> getDailyBars(String symbol, int days);
+
+    /**
+     * Fetch the raw {@code meta} map from the Yahoo Finance v8/chart endpoint for the
+     * given symbol.  Useful for retrieving fields like {@code regularMarketPrice},
+     * {@code chartPreviousClose}, {@code postMarketPrice}, and {@code shortName} in a
+     * single call.
+     * <p>
+     * The symbol is URL-encoded internally so index tickers like {@code ^GSPC} and
+     * {@code GC=F} are handled correctly.
+     *
+     * @param symbol Yahoo Finance ticker (e.g. "^GSPC", "GC=F", "AAPL")
+     * @return meta map, or an empty map when data is unavailable
+     */
+    Map<String, Object> getChartMeta(String symbol);
 }

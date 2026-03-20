@@ -65,4 +65,41 @@ class StockPriceServiceTest {
         double quotePrice = (double) meta.get("regularMarketPrice");
         assertThat(BigDecimal.valueOf(quotePrice)).isEqualByComparingTo(expectedPrice);
     }
+
+    // ── getPostMarketPrice ────────────────────────────────────────────────────
+
+    @Test
+    void getPostMarketPrice_returnsNonNullFromMock() {
+        // MockYahooFinanceClient returns seedPrice + $2.00 to simulate after-hours data.
+        BigDecimal postPrice = service.getPostMarketPrice("AAPL");
+        assertThat(postPrice).isNotNull();
+    }
+
+    @Test
+    void getPostMarketPrice_isPositive() {
+        BigDecimal postPrice = service.getPostMarketPrice("TQQQ");
+        assertThat(postPrice).isGreaterThan(BigDecimal.ZERO);
+    }
+
+    @Test
+    void getPostMarketPrice_isGreaterThanRegularPrice() {
+        // Mock contract: postMarketPrice = seedPrice + 2.0, so it is always above close.
+        BigDecimal regular  = service.getCurrentPrice("NVDA");
+        BigDecimal postMarket = service.getPostMarketPrice("NVDA");
+        assertThat(postMarket).isGreaterThan(regular);
+    }
+
+    @Test
+    void getPostMarketPrice_differsBySymbol() {
+        BigDecimal aapl = service.getPostMarketPrice("AAPL");
+        BigDecimal nvda = service.getPostMarketPrice("NVDA");
+        assertThat(aapl).isNotEqualByComparingTo(nvda);
+    }
+
+    @Test
+    void getPostMarketPrice_isConsistentAcrossCallsForSameSymbol() {
+        BigDecimal first  = service.getPostMarketPrice("IWM");
+        BigDecimal second = service.getPostMarketPrice("IWM");
+        assertThat(first).isEqualByComparingTo(second);
+    }
 }

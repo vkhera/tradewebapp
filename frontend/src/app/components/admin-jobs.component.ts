@@ -408,8 +408,14 @@ export class AdminJobsComponent implements OnInit {
     this.triggeringJob = job.jobName;
     delete this.triggerMessages[job.jobName];
     this.api.triggerJob(job.jobName).subscribe({
-      next: () => {
-        this.triggerMessages[job.jobName] = { ok: true, text: 'Triggered successfully. Refresh in a moment.' };
+      next: (res) => {
+        const isAsync = res?.status === 'accepted';
+        this.triggerMessages[job.jobName] = {
+          ok: true,
+          text: isAsync
+            ? 'Job started in background. Refresh in a moment to see the result.'
+            : 'Triggered successfully. Refresh in a moment.'
+        };
         this.triggeringJob = null;
         this.cd.markForCheck();
         setTimeout(() => {

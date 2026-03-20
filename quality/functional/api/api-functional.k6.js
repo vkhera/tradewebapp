@@ -126,5 +126,64 @@ export default function () {
     });
   }
 
+  // ── Market status endpoint ────────────────────────────────────────────────
+  const marketStatusResponse = http.get(`${baseUrl}/api/market/status`, clientAuth);
+  check(marketStatusResponse, {
+    'market status returns 200':                  (r) => r.status === 200,
+    'market status has status field':             (r) => { try { return 'status' in JSON.parse(r.body); } catch { return false; } },
+    'market status is a known value':             (r) => {
+      try {
+        const s = JSON.parse(r.body).status;
+        return ['OPEN', 'PRE_MARKET', 'POST_MARKET', 'CLOSED'].includes(s);
+      } catch { return false; }
+    },
+    'market status has statusLabel field':        (r) => { try { return 'statusLabel' in JSON.parse(r.body); } catch { return false; } },
+    'market status has estTime field':            (r) => { try { const b = JSON.parse(r.body); return typeof b.estTime === 'string' && b.estTime.length > 0; } catch { return false; } },
+    'market status has isRegularOpen boolean':    (r) => { try { return typeof JSON.parse(r.body).isRegularOpen === 'boolean'; } catch { return false; } }
+  });
+
+  // ── Market indices endpoint ────────────────────────────────────────────────
+  const marketIndicesResponse = http.get(`${baseUrl}/api/market/indices`, clientAuth);
+  check(marketIndicesResponse, {
+    'market indices returns 200':                  (r) => r.status === 200,
+    'market indices response is an array':         (r) => { try { return Array.isArray(JSON.parse(r.body)); } catch { return false; } },
+    'market indices has exactly 5 entries':        (r) => { try { return JSON.parse(r.body).length === 5; } catch { return false; } },
+    'market indices entries have symbol field':    (r) => {
+      try {
+        const arr = JSON.parse(r.body);
+        return arr.length > 0 && arr.every(e => typeof e.symbol === 'string' && e.symbol.length > 0);
+      } catch { return false; }
+    },
+    'market indices entries have name field':      (r) => {
+      try {
+        const arr = JSON.parse(r.body);
+        return arr.length > 0 && arr.every(e => typeof e.name === 'string' && e.name.length > 0);
+      } catch { return false; }
+    },
+    'market indices entries have postMarketPrice key': (r) => {
+      try {
+        const arr = JSON.parse(r.body);
+        // postMarketPrice may be null (outside post-market hours) but the field must exist
+        return arr.length > 0 && arr.every(e => 'postMarketPrice' in e);
+      } catch { return false; }
+    }
+  });
+
+  // ── Portfolio summary postMarketPrice field check ─────────────────────────
+  const summaryResponse = http.get(`${baseUrl}/api/portfolio/client/${clientId}/summary`, clientAuth);
+  check(summaryResponse, {
+    'portfolio summary returns 200': (r) => r.status === 200
+  });
+
+  const summaryBody = (() => { try { return JSON.parse(summaryResponse.body); } catch { return null; } })();
+  if (summaryBody !== null && Array.isArray(summaryBody.holdings) && summaryBody.holdings.length > 0) {
+    check(summaryResponse, {
+      'portfolio holdings all have postMarketPrice field': () =>
+        summaryBody.holdings.every(h => 'postMarketPrice' in h),
+      'portfolio holdings postMarketPrice is null or number': () =>
+        summaryBody.holdings.every(h => h.postMarketPrice === null || typeof h.postMarketPrice === 'number')
+    });
+  }
+
   sleep(1);
 }

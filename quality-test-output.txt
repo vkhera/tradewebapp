@@ -1,0 +1,444 @@
+﻿
+> stock-brokerage-quality@1.0.0 test:docker
+> npm-run-all -s frontend:test:docker api:functional:docker
+
+
+> stock-brokerage-quality@1.0.0 frontend:test:docker
+> cross-env PLAYWRIGHT_BASE_URL=http://localhost playwright test --config ./functional/frontend/playwright.config.ts
+
+
+Running 77 tests using 1 worker
+
+[1A[2K[1/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:73:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 1. Real admin login via the login form ΓÇ║ login page renders expected controls
+[1A[2K[2/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:81:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 1. Real admin login via the login form ΓÇ║ admin logs in with valid credentials and lands on Client Management
+[1A[2K[3/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:92:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 1. Real admin login via the login form ΓÇ║ invalid credentials keep the user on the login page with an error
+[1A[2K[4/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:110:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 2. Admin navigation and screen availability ΓÇ║ admin nav bar shows Manage Clients, Manage Rules, and Client Holdings links
+[1A[2K[5/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:118:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 2. Admin navigation and screen availability ΓÇ║ admin can navigate to /admin/clients ΓÇô Client Management heading visible
+[1A[2K[6/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:124:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 2. Admin navigation and screen availability ΓÇ║ admin can navigate to /admin/rules ΓÇô Rule Management heading visible
+[1A[2K[7/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:130:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 2. Admin navigation and screen availability ΓÇ║ admin can navigate to /admin/holdings ΓÇô Client Holdings heading visible
+[1A[2K[8/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:136:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 2. Admin navigation and screen availability ΓÇ║ non-admin (client5) is redirected away from /admin/clients
+[1A[2K[9/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:158:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 3. Client Management page ΓÇô data validation ΓÇ║ clients table loads and contains at least one row
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:158:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 3. Client Management page ΓÇô data validation ΓÇ║ clients table loads and contains at least one row
+[clients-table] 5 client rows loaded
+
+[1A[2K[10/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:167:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 3. Client Management page ΓÇô data validation ΓÇ║ clients table has the required column headers
+[1A[2K[11/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:180:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 3. Client Management page ΓÇô data validation ΓÇ║ client5 appears in the clients table
+[1A[2K[12/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:187:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 3. Client Management page ΓÇô data validation ΓÇ║ every client row has a numeric ID, non-blank Code, and non-blank Name
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:187:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 3. Client Management page ΓÇô data validation ΓÇ║ every client row has a numeric ID, non-blank Code, and non-blank Name
+[clients-table] All 5 rows have valid ID / Code / Name Γ£ô
+
+[1A[2K[13/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:204:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 3. Client Management page ΓÇô data validation ΓÇ║ "Add New Client" button toggles the client form open and closed
+[1A[2K[14/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:230:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 4. Import Data ΓÇô Clean Up client5 data via UI ΓÇ║ Cleanup Client Data section is visible and has a Client ID input for admin
+[1A[2K[15/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:242:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 4. Import Data ΓÇô Clean Up client5 data via UI ΓÇ║ admin performs cleanup of client5 and sees a success result box
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:242:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 4. Import Data ΓÇô Clean Up client5 data via UI ΓÇ║ admin performs cleanup of client5 and sees a success result box
+[cleanup] Confirm dialog: "Are you sure you want to delete all portfolio and trade data for client 5? This cannot be undone." ΓåÆ accepting
+
+[1A[2K[cleanup] Result: Cleanup completed successfullyTotal records deleted: 46
+
+[1A[2K[16/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:278:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 5. Validate cleanup ΓÇô client5 portfolio must be empty ΓÇ║ API confirms client5 has zero holdings immediately after cleanup
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:278:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 5. Validate cleanup ΓÇô client5 portfolio must be empty ΓÇ║ API confirms client5 has zero holdings immediately after cleanup
+[cleanup-verify] client5 holdings after cleanup: 0
+
+[1A[2K[17/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:309:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 6. Import Data ΓÇô Import Activity for client5 via UI ΓÇ║ admin fills in the Activity import form and import completes successfully
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:309:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 6. Import Data ΓÇô Import Activity for client5 via UI ΓÇ║ admin fills in the Activity import form and import completes successfully
+[activity-import] Result: Activity imported successfullyProcessed: 29Imported: 24Skipped: 5
+
+[1A[2K[18/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:341:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 6. Import Data ΓÇô Import Activity for client5 via UI ΓÇ║ activity import result box shows recordsImported > 0
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:341:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 6. Import Data ΓÇô Import Activity for client5 via UI ΓÇ║ activity import result box shows recordsImported > 0
+[activity-import] Full result: Activity imported successfullyProcessed: 29Imported: 24Skipped: 5
+
+[1A[2K[activity-import] Records imported: 24
+
+[1A[2K[19/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:381:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 7. Validate portfolio ΓÇô must be populated after activity import ΓÇ║ client5 has holdings in the portfolio after import (polls ReconciliationService)
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:381:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 7. Validate portfolio ΓÇô must be populated after activity import ΓÇ║ client5 has holdings in the portfolio after import (polls ReconciliationService)
+[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[portfolio-verify] client5 has 0 holdings after import
+
+[1A[2K  1) [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:381:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 7. Validate portfolio ΓÇô must be populated after activity import ΓÇ║ client5 has holdings in the portfolio after import (polls ReconciliationService) 
+
+    Error: Portfolio should be populated (> 0 holdings) after activity import
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoBeGreaterThan[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: > [32m0[39m
+    Received:   [31m0[39m
+
+      398 |       }
+      399 |       console.log(`[portfolio-verify] client5 has ${holdingCount} holdings after import`);
+    > 400 |       expect(holdingCount, 'Portfolio should be populated (> 0 holdings) after activity import').toBeGreaterThan(0);
+          |                                                                                                  ^
+      401 |     });
+      402 |
+      403 |     test('portfolio API returns holdings with non-empty symbols and positive quantities', async ({ request }) => {
+        at C:\projects\ws-trd-1\quality\functional\frontend\tests\admin-ui.spec.ts:400:98
+
+
+[1A[2K[20/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:403:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 7. Validate portfolio ΓÇô must be populated after activity import ΓÇ║ portfolio API returns holdings with non-empty symbols and positive quantities
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:403:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 7. Validate portfolio ΓÇô must be populated after activity import ΓÇ║ portfolio API returns holdings with non-empty symbols and positive quantities
+[portfolio-verify] 22 holdings verified Γ£ô
+
+[1A[2K[21/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:444:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 8. Admin Client Holdings page ΓÇô client5 newly-imported holdings ΓÇ║ /admin/holdings page loads and the holdings table renders at least one row
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:444:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 8. Admin Client Holdings page ΓÇô client5 newly-imported holdings ΓÇ║ /admin/holdings page loads and the holdings table renders at least one row
+[admin-holdings-setup] client5 API holding count: 22
+
+[1A[2K[22/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:451:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 8. Admin Client Holdings page ΓÇô client5 newly-imported holdings ΓÇ║ holdings table has columns: Client ID, Client Name, Symbol, Quantity
+[1A[2K[23/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:462:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 8. Admin Client Holdings page ΓÇô client5 newly-imported holdings ΓÇ║ filtering by client5 ID shows the newly imported holdings (row count matches API)
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:462:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 8. Admin Client Holdings page ΓÇô client5 newly-imported holdings ΓÇ║ filtering by client5 ID shows the newly imported holdings (row count matches API)
+[admin-holdings] Filtered rows for client 5: 22, expected: 22
+
+[1A[2K[24/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:478:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 8. Admin Client Holdings page ΓÇô client5 newly-imported holdings ΓÇ║ every client5 row has the correct Client ID, non-empty symbol, and positive quantity
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:478:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 8. Admin Client Holdings page ΓÇô client5 newly-imported holdings ΓÇ║ every client5 row has the correct Client ID, non-empty symbol, and positive quantity
+[admin-holdings] All 22 client5 rows verified Γ£ô
+
+[1A[2K[25/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:514:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 8. Admin Client Holdings page ΓÇô client5 newly-imported holdings ΓÇ║ summary bar reports correct row count and exactly 1 client when filtered to client5
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:514:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 8. Admin Client Holdings page ΓÇô client5 newly-imported holdings ΓÇ║ summary bar reports correct row count and exactly 1 client when filtered to client5
+[admin-holdings] Summary bar: "22 row(s) ┬╖ 1 client(s) ┬╖ 22 symbol(s)"
+
+[1A[2K[26/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:532:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 8. Admin Client Holdings page ΓÇô client5 newly-imported holdings ΓÇ║ symbol filter narrows client5 rows to matching symbols only
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:532:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 8. Admin Client Holdings page ΓÇô client5 newly-imported holdings ΓÇ║ symbol filter narrows client5 rows to matching symbols only
+[admin-holdings] Symbol filter test using prefix of: "ARKK"
+
+[1A[2K[admin-holdings] Symbol prefix filter "AR" ΓåÆ 1 row(s) Γ£ô
+
+[1A[2K[27/77] [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:569:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 8. Admin Client Holdings page ΓÇô client5 newly-imported holdings ΓÇ║ "Clear Filters" button restores the full unfiltered holdings table
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:569:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 8. Admin Client Holdings page ΓÇô client5 newly-imported holdings ΓÇ║ "Clear Filters" button restores the full unfiltered holdings table
+[admin-holdings] Total rows (unfiltered): 77
+
+[1A[2K[admin-holdings] Restored to 77 rows after clear Γ£ô
+
+[1A[2K[28/77] [chromium] ΓÇ║ functional\frontend\tests\market-indices-postmarket.spec.ts:92:7 ΓÇ║ Market indices bar and post-market price column ΓÇ║ market-status pill is visible on portfolio page
+[1A[2K[29/77] [chromium] ΓÇ║ functional\frontend\tests\market-indices-postmarket.spec.ts:110:7 ΓÇ║ Market indices bar and post-market price column ΓÇ║ index quotes bar renders with 5 tiles
+[1A[2K[30/77] [chromium] ΓÇ║ functional\frontend\tests\market-indices-postmarket.spec.ts:124:7 ΓÇ║ Market indices bar and post-market price column ΓÇ║ every index tile has a non-empty name
+[1A[2K[31/77] [chromium] ΓÇ║ functional\frontend\tests\market-indices-postmarket.spec.ts:142:7 ΓÇ║ Market indices bar and post-market price column ΓÇ║ every index tile shows either a price value or a dash placeholder
+[1A[2K[32/77] [chromium] ΓÇ║ functional\frontend\tests\market-indices-postmarket.spec.ts:161:7 ΓÇ║ Market indices bar and post-market price column ΓÇ║ portfolio table header contains a Post-Market column
+[1A[2K[33/77] [chromium] ΓÇ║ functional\frontend\tests\market-indices-postmarket.spec.ts:174:7 ΓÇ║ Market indices bar and post-market price column ΓÇ║ every portfolio row has a post-market cell
+[1A[2K[34/77] [chromium] ΓÇ║ functional\frontend\tests\market-indices-postmarket.spec.ts:197:7 ΓÇ║ Market indices bar and post-market price column ΓÇ║ GET /api/market/status returns 200 with valid status fields
+[1A[2K[35/77] [chromium] ΓÇ║ functional\frontend\tests\market-indices-postmarket.spec.ts:218:7 ΓÇ║ Market indices bar and post-market price column ΓÇ║ GET /api/market/indices returns 5 entries with symbol and name
+[1A[2K[36/77] [chromium] ΓÇ║ functional\frontend\tests\market-indices-postmarket.spec.ts:240:7 ΓÇ║ Market indices bar and post-market price column ΓÇ║ portfolio summary holdings each have a postMarketPrice field
+[1A[2K[37/77] [chromium] ΓÇ║ functional\frontend\tests\portfolio-integrity.spec.ts:119:7 ΓÇ║ Portfolio page ΓÇô data integrity (client5) ΓÇ║ UI row count matches API / database holding count
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\portfolio-integrity.spec.ts:119:7 ΓÇ║ Portfolio page ΓÇô data integrity (client5) ΓÇ║ UI row count matches API / database holding count
+[setup] Cleaning up client5 dataΓÇª
+
+[1A[2K[setup] Cleanup responded with 200
+
+[1A[2K[setup] Importing GeneratedActivity-IRA94178.csv for client5ΓÇª
+
+[1A[2K[setup] Import responded with 200: {"success":true,"message":"Activity imported successfully","recordsProcessed":29,"recordsImported":24,"recordsSkipped":5,"errors":[]}
+
+[1A[2K[warmup] Waiting for ReconciliationService to populate client5 portfolioΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio ready: 22 holdings found
+
+[1A[2K[API] client5 has 22 holdings in the database
+
+[1A[2K[UI]  22 rows rendered ΓÇô matches database Γ£ô
+
+[1A[2K[38/77] [chromium] ΓÇ║ functional\frontend\tests\portfolio-integrity.spec.ts:142:7 ΓÇ║ Portfolio page ΓÇô data integrity (client5) ΓÇ║ no row is empty ΓÇô symbol, quantity, avg price and current price are all populated
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\portfolio-integrity.spec.ts:142:7 ΓÇ║ Portfolio page ΓÇô data integrity (client5) ΓÇ║ no row is empty ΓÇô symbol, quantity, avg price and current price are all populated
+[UI]  Checking 22 rows for empty cells
+
+[1A[2K  2) [chromium] ΓÇ║ functional\frontend\tests\portfolio-integrity.spec.ts:142:7 ΓÇ║ Portfolio page ΓÇô data integrity (client5) ΓÇ║ no row is empty ΓÇô symbol, quantity, avg price and current price are all populated 
+
+    Error: Row 1 [IWM]: total value cell is blank or malformed
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoMatch[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected pattern: [32m/^\$[\d,]+\.\d{2}$/[39m
+    Received string:  [31m"ΓÇö"[39m
+
+      177 |       const totalText = ((await cells.nth(5).textContent()) ?? '').trim();
+      178 |       expect(totalText, `Row ${i + 1} [${symbol}]: total value cell is blank or malformed`)
+    > 179 |         .toMatch(/^\$[\d,]+\.\d{2}$/);
+          |          ^
+      180 |     }
+      181 |
+      182 |     console.log(`[UI]  All ${rowCount} rows are fully populated Γ£ô`);
+        at C:\projects\ws-trd-1\quality\functional\frontend\tests\portfolio-integrity.spec.ts:179:10
+
+    Error Context: test-results\portfolio-integrity-Portfo-192f6-ent-price-are-all-populated-chromium\error-context.md
+
+
+[1A[2K[39/77] [chromium] ΓÇ║ functional\frontend\tests\portfolio-integrity.spec.ts:187:7 ΓÇ║ Portfolio page ΓÇô data integrity (client5) ΓÇ║ row count remains stable after 70 s reconciliation cycle
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\portfolio-integrity.spec.ts:187:7 ΓÇ║ Portfolio page ΓÇô data integrity (client5) ΓÇ║ row count remains stable after 70 s reconciliation cycle
+[setup] Cleaning up client5 dataΓÇª
+
+[1A[2K[setup] Cleanup responded with 200
+
+[1A[2K[setup] Importing GeneratedActivity-IRA94178.csv for client5ΓÇª
+
+[1A[2K[setup] Import responded with 200: {"success":true,"message":"Activity imported successfully","recordsProcessed":29,"recordsImported":24,"recordsSkipped":5,"errors":[]}
+
+[1A[2K[warmup] Waiting for ReconciliationService to populate client5 portfolioΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio ready: 22 holdings found
+
+[1A[2K[API] 22 holdings before reconciliation wait
+
+[1A[2K[UI]  22 rows rendered initially
+
+[1A[2K[Test] Waiting 70 s for reconciliation cycleΓÇª
+
+[1A[2K[UI]  22 rows after reconciliation
+
+[1A[2K[40/77] [chromium] ΓÇ║ functional\frontend\tests\portfolio-integrity.spec.ts:220:7 ΓÇ║ Portfolio page ΓÇô data integrity (client5) ΓÇ║ filter bar is visible and reduces / restores displayed rows
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\portfolio-integrity.spec.ts:220:7 ΓÇ║ Portfolio page ΓÇô data integrity (client5) ΓÇ║ filter bar is visible and reduces / restores displayed rows
+[UI]  Rows after filter "NV": 1 of 22
+
+[1A[2K[UI]  Filter bar behaviour verified Γ£ô
+
+[1A[2K[41/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:38:7 ΓÇ║ Frontend screen coverage ΓÇ║ admin can log in from login page and land on admin clients
+[1A[2K[42/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:49:7 ΓÇ║ Frontend screen coverage ΓÇ║ activity file upload flow sets filename and enables import action
+[1A[2K[43/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:67:7 ΓÇ║ Frontend screen coverage ΓÇ║ login page renders and key controls are available
+[1A[2K[44/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:75:7 ΓÇ║ Frontend screen coverage ΓÇ║ unauthenticated access redirects to login
+[1A[2K[45/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:81:7 ΓÇ║ Frontend screen coverage ΓÇ║ unknown route redirects to login
+[1A[2K[46/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:87:9 ΓÇ║ Frontend screen coverage ΓÇ║ client screen renders: /portfolio
+[1A[2K[47/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:87:9 ΓÇ║ Frontend screen coverage ΓÇ║ client screen renders: /trade
+[1A[2K[48/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:87:9 ΓÇ║ Frontend screen coverage ΓÇ║ client screen renders: /order-history
+[1A[2K[49/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:87:9 ΓÇ║ Frontend screen coverage ΓÇ║ client screen renders: /realized-gains
+[1A[2K[50/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:87:9 ΓÇ║ Frontend screen coverage ΓÇ║ client screen renders: /unrealized-gains
+[1A[2K[51/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:87:9 ΓÇ║ Frontend screen coverage ΓÇ║ client screen renders: /fund-account
+[1A[2K[52/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:87:9 ΓÇ║ Frontend screen coverage ΓÇ║ client screen renders: /import-data
+[1A[2K[53/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:87:9 ΓÇ║ Frontend screen coverage ΓÇ║ client screen renders: /suggested-trades
+[1A[2K[54/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:96:9 ΓÇ║ Frontend screen coverage ΓÇ║ admin screen renders: /admin/clients
+[1A[2K[55/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:96:9 ΓÇ║ Frontend screen coverage ΓÇ║ admin screen renders: /admin/rules
+[1A[2K[56/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:104:7 ΓÇ║ Frontend screen coverage ΓÇ║ client navigation exposes major flows
+[1A[2K[57/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:115:7 ΓÇ║ Frontend screen coverage ΓÇ║ admin navigation exposes major flows
+[1A[2K[58/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:180:9 ΓÇ║ Frontend screen coverage ΓÇ║ Portfolio Predictions button ΓÇ║ Predictions button is visible for each holding row
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:180:9 ΓÇ║ Frontend screen coverage ΓÇ║ Portfolio Predictions button ΓÇ║ Predictions button is visible for each holding row
+[setup] Cleaning up client5 dataΓÇª
+
+[1A[2K[setup] Importing GeneratedActivity-IRA94178.csv for client5ΓÇª
+
+[1A[2K[setup] Import responded with 200
+
+[1A[2K[warmup] Waiting for ReconciliationService to populate client5 portfolioΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio still empty ΓÇô waiting 5 s for reconciliationΓÇª
+
+[1A[2K[warmup] Portfolio ready: 22 holdings found
+
+[1A[2K[warmup] Predictions API for TNA responded with 200
+
+[1A[2KFound 22 Predictions button(s)
+
+[1A[2K[59/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:196:9 ΓÇ║ Frontend screen coverage ΓÇ║ Portfolio Predictions button ΓÇ║ Predictions button click opens popup with data
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:196:9 ΓÇ║ Frontend screen coverage ΓÇ║ Portfolio Predictions button ΓÇ║ Predictions button click opens popup with data
+Clicking Predictions for: IWM
+
+[1A[2KPrediction table has 8 rows
+
+[1A[2KFirst predicted price cell text: "$249.42"
+
+[1A[2KFirst actual cell: "$250.05"
+
+[1A[2KPrevious business day section visible: false
+
+[1A[2K[60/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:281:9 ΓÇ║ Frontend screen coverage ΓÇ║ Portfolio Predictions button ΓÇ║ Predictions popup closes on outside click
+[1A[2K[61/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:313:9 ΓÇ║ Frontend screen coverage ΓÇ║ Portfolio ATR(14) column ΓÇ║ ATR(14) column header is present in portfolio table
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:313:9 ΓÇ║ Frontend screen coverage ΓÇ║ Portfolio ATR(14) column ΓÇ║ ATR(14) column header is present in portfolio table
+[warmup-atr] Re-priming portfolio API before ATR tests ΓÇª
+
+[1A[2K[warmup-atr] Portfolio API responded with 200
+
+[1A[2K[62/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:325:9 ΓÇ║ Frontend screen coverage ΓÇ║ Portfolio ATR(14) column ΓÇ║ ATR(14) cell is rendered for each holding row
+[1A[2K[63/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:345:9 ΓÇ║ Frontend screen coverage ΓÇ║ Portfolio ATR(14) column ΓÇ║ ATR(14) cell shows dollar value or dash placeholder
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:345:9 ΓÇ║ Frontend screen coverage ΓÇ║ Portfolio ATR(14) column ΓÇ║ ATR(14) cell shows dollar value or dash placeholder
+First ATR cell text: "$4.85 (2.0%)"
+
+[1A[2K[64/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:366:9 ΓÇ║ Frontend screen coverage ΓÇ║ Portfolio ATR(14) column ΓÇ║ ATR(14) value cell carries a colour class when value is present
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:366:9 ΓÇ║ Frontend screen coverage ΓÇ║ Portfolio ATR(14) column ΓÇ║ ATR(14) value cell carries a colour class when value is present
+ATR cell class="atr-value atr-mid"
+
+[1A[2K[65/77] [chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:391:9 ΓÇ║ Frontend screen coverage ΓÇ║ Portfolio ATR(14) column ΓÇ║ ATR(14) CSV download includes ATR columns
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\screens.spec.ts:391:9 ΓÇ║ Frontend screen coverage ΓÇ║ Portfolio ATR(14) column ΓÇ║ ATR(14) CSV download includes ATR columns
+CSV first line: Symbol,Quantity,Avg Price,Current Price,Total Value,P/L,P/L %,ATR(14),ATR%,ATR-75(14),ATR-75%,ATR-90(14),ATR-90%
+
+[1A[2K[66/77] [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:92:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ Swing Trade section heading is visible on Suggested Trades page
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:92:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ Swing Trade section heading is visible on Suggested Trades page
+[setup] Ensuring client5 has portfolio holdings for swing trade testsΓÇª
+
+[1A[2K[setup] Portfolio ready
+
+[1A[2K[67/77] [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:102:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ Swing trade section shows table or no-signal notice after analysis
+[1A[2K  3) [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:102:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ Swing trade section shows table or no-signal notice after analysis 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: table.swing-table, text=No swing trade signals at this time >> nth=0
+    Expected: visible
+    Error: Unexpected token "=" while parsing css selector "table.swing-table, text=No swing trade signals at this time". Did you mean to CSS.escape it?
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 90000ms[22m
+    [2m  - waiting for table.swing-table, text=No swing trade signals at this time >> nth=0[22m
+
+
+      109 |     // Either a filled table OR the "no swing signals" placeholder must be present
+      110 |     const tableOrNotice = page.locator('table.swing-table, text=No swing trade signals at this time');
+    > 111 |     await expect(tableOrNotice.first()).toBeVisible({ timeout: 90_000 });
+          |                                         ^
+      112 |   });
+      113 |
+      114 |   // 3. Swing suggestions endpoint returns valid shape ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+        at C:\projects\ws-trd-1\quality\functional\frontend\tests\swing-trades-options.spec.ts:111:41
+
+    Error Context: test-results\swing-trades-options-Swing-8df32-ignal-notice-after-analysis-chromium\error-context.md
+
+
+[1A[2K[68/77] [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:116:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: swing suggestions endpoint returns 200 with an array
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:116:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: swing suggestions endpoint returns 200 with an array
+[setup] Ensuring client5 has portfolio holdings for swing trade testsΓÇª
+
+[1A[2K[setup] Portfolio ready
+
+[1A[2K[69/77] [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:126:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: each swing suggestion has required fields
+[1A[2K[70/77] [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:150:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: reasoning field is a non-empty string
+[1A[2K[71/77] [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:164:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: when options data is available reasoning contains "Options market:" suffix
+[1A[2K[72/77] [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:182:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: HOLD stop-loss is below current price
+[1A[2K[73/77] [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:197:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: SELL stop-loss is above re-entry target price
+[1A[2K[74/77] [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:213:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: at most 5 swing suggestions returned
+[1A[2K  4) [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:213:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: at most 5 swing suggestions returned 
+
+    Error: expect: Property 'toBeLessThanOrEqualTo' not found.
+
+      217 |     });
+      218 |     const suggestions: unknown[] = await resp.json();
+    > 219 |     expect(suggestions.length).toBeLessThanOrEqualTo(5);
+          |                               ^
+      220 |   });
+      221 |
+      222 |   // 7. Swing history endpoint ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+        at C:\projects\ws-trd-1\quality\functional\frontend\tests\swing-trades-options.spec.ts:219:31
+
+
+[1A[2K[75/77] [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:224:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: swing history returns 200 with an array
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:224:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: swing history returns 200 with an array
+[setup] Ensuring client5 has portfolio holdings for swing trade testsΓÇª
+
+[1A[2K[setup] Portfolio ready
+
+[1A[2K[76/77] [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:236:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: trend analysis includes Options_Sentiment in techniqueResults
+[1A[2K  5) [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:236:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: trend analysis includes Options_Sentiment in techniqueResults 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoHaveProperty[2m([22m[32mpath[39m[2m)[22m
+
+    Expected path: [32m"Options_Sentiment"[39m
+    Received path: [31m[][39m
+
+    Received value: [31m{"MACD": "DOWNTREND", "MA_Crossover": "UPTREND", "Price_Momentum": "DOWNTREND", "RSI": "SIDEWAYS", "Volume_Trend": "SIDEWAYS"}[39m
+
+      245 |     expect(['UPTREND', 'DOWNTREND', 'SIDEWAYS']).toContain(body.overallTrend);
+      246 |     expect(body).toHaveProperty('techniqueResults');
+    > 247 |     expect(body.techniqueResults).toHaveProperty('Options_Sentiment');
+          |                                   ^
+      248 |     expect(['UPTREND', 'DOWNTREND', 'SIDEWAYS']).toContain(body.techniqueResults['Options_Sentiment']);
+      249 |   });
+      250 |
+        at C:\projects\ws-trd-1\quality\functional\frontend\tests\swing-trades-options.spec.ts:247:35
+
+
+[1A[2K[77/77] [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:253:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ Swing Refresh button is enabled and clickable
+[1A[2K[chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:253:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ Swing Refresh button is enabled and clickable
+[setup] Ensuring client5 has portfolio holdings for swing trade testsΓÇª
+
+[1A[2K[setup] Portfolio ready
+
+[1A[2K  5 failed
+    [chromium] ΓÇ║ functional\frontend\tests\admin-ui.spec.ts:381:9 ΓÇ║ Admin user ΓÇô functional UI tests ΓÇ║ 7. Validate portfolio ΓÇô must be populated after activity import ΓÇ║ client5 has holdings in the portfolio after import (polls ReconciliationService) 
+    [chromium] ΓÇ║ functional\frontend\tests\portfolio-integrity.spec.ts:142:7 ΓÇ║ Portfolio page ΓÇô data integrity (client5) ΓÇ║ no row is empty ΓÇô symbol, quantity, avg price and current price are all populated 
+    [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:102:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ Swing trade section shows table or no-signal notice after analysis 
+    [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:213:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: at most 5 swing suggestions returned 
+    [chromium] ΓÇ║ functional\frontend\tests\swing-trades-options.spec.ts:236:7 ΓÇ║ Swing Trade Suggestions ΓÇô options overlay ΓÇ║ API: trend analysis includes Options_Sentiment in techniqueResults 
+  72 passed (6.2m)
+
+To open last HTML report run:
+[36m[39m
+[36m  npx playwright show-report reports\playwright-report[39m
+[36m[39m
+node.exe : ERROR: "frontend:test:docker" exited with 1.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR: "fronten... exited wi    
+th 1.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

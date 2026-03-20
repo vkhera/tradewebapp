@@ -101,6 +101,13 @@ public class PortfolioService {
         BigDecimal atr75 = atrResult != null ? atrResult.atr75() : null;
         BigDecimal atr90 = atrResult != null ? atrResult.atr90() : null;
 
+        BigDecimal postMarketPrice = null;
+        try {
+            postMarketPrice = stockPriceService.getPostMarketPrice(portfolio.getSymbol());
+        } catch (Exception e) {
+            log.debug("Post-market price fetch failed for {}: {}", portfolio.getSymbol(), e.getMessage());
+        }
+
         return new PortfolioResponse(
             portfolio.getId(),
             portfolio.getSymbol(),
@@ -112,7 +119,8 @@ public class PortfolioService {
             profitLossPercent,
             atr14,
             atr75,
-            atr90
+            atr90,
+            postMarketPrice
         );
     }
     

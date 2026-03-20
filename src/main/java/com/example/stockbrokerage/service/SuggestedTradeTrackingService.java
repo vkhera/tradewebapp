@@ -43,7 +43,7 @@ import java.util.Map;
 public class SuggestedTradeTrackingService {
 
     /** How many days back to look when returning the "recent history" for the UI. */
-    private static final int HISTORY_DAYS = 5;
+    private static final int HISTORY_DAYS = 10;
 
     /** How many days back the daily scheduler scans for PENDING records. */
     private static final int SCHEDULER_LOOKBACK_DAYS = 10;
@@ -130,6 +130,7 @@ public class SuggestedTradeTrackingService {
                 });
 
         return records.stream()
+                .filter(r -> !"WATCH".equalsIgnoreCase(r.getAction()))
                 .map(r -> toHistoryResponse(r, priceMap.get(r.getSymbol())))
                 .toList();
     }
@@ -145,9 +146,15 @@ public class SuggestedTradeTrackingService {
         List<SuggestedTradeRecord> all = repository
                 .findByClientIdAndSuggestedDateAfterOrderBySuggestedDateDesc(clientId, cutoff);
 
-        int success = (int) all.stream().filter(r -> r.getStatus() == TradeOutcomeStatus.SUCCESS).count();
-        int failed  = (int) all.stream().filter(r -> r.getStatus() == TradeOutcomeStatus.FAILED).count();
-        int pending = (int) all.stream().filter(r -> r.getStatus() == TradeOutcomeStatus.PENDING).count();
+        // Exclude WATCH (no-target) suggestions — they have no buy-back goal and should not
+        // skew the success/failure rate statistics.
+        List<SuggestedTradeRecord> trackable = all.stream()
+                .filter(r -> !"WATCH".equalsIgnoreCase(r.getAction()))
+                .toList();
+
+        int success = (int) trackable.stream().filter(r -> r.getStatus() == TradeOutcomeStatus.SUCCESS).count();
+        int failed  = (int) trackable.stream().filter(r -> r.getStatus() == TradeOutcomeStatus.FAILED).count();
+        int pending = (int) trackable.stream().filter(r -> r.getStatus() == TradeOutcomeStatus.PENDING).count();
         int resolved = success + failed;
 
         double ratePct = resolved == 0 ? 0.0

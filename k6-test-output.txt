@@ -1,0 +1,132 @@
+﻿
+> stock-brokerage-quality@1.0.0 api:functional:docker
+> tools\k6\k6-v1.6.1-windows-amd64\k6.exe run -e BASE_URL=http://localhost:8080 -e P95_THRESHOLD=4000 ./functional/api/api-functional.k6.js
+
+
+         /\      Grafana   /ΓÇ╛ΓÇ╛/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ΓÇ╛ΓÇ╛\ 
+  /          \   |   (  |  (ΓÇ╛)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: ./functional/api/api-functional.k6.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 1 max VUs, 10m30s max duration (incl. graceful stop):
+              * default: 1 iterations shared among 1 VUs (maxDuration: 10m0s, gracefulStop: 30s)
+
+
+running (00m01.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   0% ] 1 VUs  00m01.0s/10m0s  0/1 shared iters
+
+running (00m02.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   0% ] 1 VUs  00m02.0s/10m0s  0/1 shared iters
+
+running (00m03.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   0% ] 1 VUs  00m03.0s/10m0s  0/1 shared iters
+
+running (00m04.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   0% ] 1 VUs  00m04.0s/10m0s  0/1 shared iters
+
+running (00m05.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   0% ] 1 VUs  00m05.0s/10m0s  0/1 shared iters
+
+running (00m06.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   0% ] 1 VUs  00m06.0s/10m0s  0/1 shared iters
+
+running (00m07.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   0% ] 1 VUs  00m07.0s/10m0s  0/1 shared iters
+
+running (00m08.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   0% ] 1 VUs  00m08.0s/10m0s  0/1 shared iters
+
+running (00m09.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   0% ] 1 VUs  00m09.0s/10m0s  0/1 shared iters
+
+running (00m10.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   0% ] 1 VUs  00m10.0s/10m0s  0/1 shared iters
+
+running (00m11.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   0% ] 1 VUs  00m11.0s/10m0s  0/1 shared iters
+
+
+  Γûê THRESHOLDS 
+
+    http_req_duration
+    Γ£ô 'p(95)<4000' p(95)=2.4s
+
+    http_req_failed
+    Γ£ô 'rate<0.05' rate=0.00%
+
+
+  Γûê TOTAL RESULTS 
+
+    checks_total.......: 40     3.433487/s
+    checks_succeeded...: 97.50% 39 out of 40
+    checks_failed......: 2.50%  1 out of 40
+
+    Γ£ô auth login succeeds
+    Γ£ô account endpoint status is 200
+    Γ£ô portfolio endpoint status is 200
+    Γ£ô portfolio summary endpoint status is 200
+    Γ£ô trades by client endpoint status is 200
+    Γ£ô stocks price endpoint status is 200
+    Γ£ô trend endpoint status is 200
+    Γ£ô prediction endpoint status is 200
+    Γ£ô prediction response is 200
+    Γ£ô prediction has hourlyPredictions array
+    Γ£ô prediction has previousDayPredictions field
+    Γ£ô hourlyPredictions entries have predictedPrice
+    Γ£ô hourlyPredictions entries have actualPrice key
+    Γ£ô admin clients endpoint status is 200
+    Γ£ô admin rules endpoint status is 200
+    Γ£ô admin trades endpoint status is 200
+    Γ£ô swing trades suggestions status is 200
+    Γ£ô swing trades response is a JSON array
+    Γ£ô swing history status is 200
+    Γ£ô swing history response is JSON array
+    Γ£ô trend analysis for AAPL returns 200
+    Γ£ô trend has overallTrend field
+    Γ£ô trend overallTrend is valid value
+    Γ£ô trend has techniqueResults map
+    Γ£ù trend includes Options_Sentiment
+      Γå│  0% ΓÇö Γ£ô 0 / Γ£ù 1
+    Γ£ô market status returns 200
+    Γ£ô market status has status field
+    Γ£ô market status is a known value
+    Γ£ô market status has statusLabel field
+    Γ£ô market status has estTime field
+    Γ£ô market status has isRegularOpen boolean
+    Γ£ô market indices returns 200
+    Γ£ô market indices response is an array
+    Γ£ô market indices has exactly 5 entries
+    Γ£ô market indices entries have symbol field
+    Γ£ô market indices entries have name field
+    Γ£ô market indices entries have postMarketPrice key
+    Γ£ô portfolio summary returns 200
+    Γ£ô portfolio holdings all have postMarketPrice field
+    Γ£ô portfolio holdings postMarketPrice is null or number
+
+    HTTP
+    http_req_duration..............: avg=590.13ms min=2.86ms med=79.07ms max=5.19s  p(90)=1.43s  p(95)=2.4s  
+      { expected_response:true }...: avg=590.13ms min=2.86ms med=79.07ms max=5.19s  p(90)=1.43s  p(95)=2.4s  
+    http_req_failed................: 0.00%  0 out of 18
+    http_reqs......................: 18     1.545069/s
+
+    EXECUTION
+    iteration_duration.............: avg=11.64s   min=11.64s med=11.64s  max=11.64s p(90)=11.64s p(95)=11.64s
+    iterations.....................: 1      0.085837/s
+    vus............................: 1      min=1       max=1
+    vus_max........................: 1      min=1       max=1
+
+    NETWORK
+    data_received..................: 98 kB  8.4 kB/s
+    data_sent......................: 3.9 kB 336 B/s
+
+
+
+
+running (00m11.6s), 0/1 VUs, 1 complete and 0 interrupted iterations
+default Γ£ô [ 100% ] 1 VUs  00m11.6s/10m0s  1/1 shared iters

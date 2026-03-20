@@ -184,6 +184,15 @@ export class ApiService {
     return this.http.get<any>(`${this.baseUrl}/stocks/price/${symbol}`, this.getHttpOptions());
   }
 
+  // Market status & index quotes
+  getMarketStatus(): Observable<any> {
+    return this.http.get<any>(`${this.baseUrl}/market/status`, this.getHttpOptions());
+  }
+
+  getMarketIndices(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.baseUrl}/market/indices`, this.getHttpOptions());
+  }
+
   // Import APIs
   uploadImportFile(file: File): Observable<{fileName: string}> {
     const formData = new FormData();

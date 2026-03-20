@@ -48,6 +48,16 @@ public class MockYahooFinanceClient implements YahooFinanceClient {
     }
 
     @Override
+    public BigDecimal getPostMarketPrice(String symbol) {
+        // Simulate a post-market price that is $2.00 above the regular close price.
+        // Using a deterministic offset keeps assertions stable across test runs.
+        BigDecimal postPrice = seedPrice(symbol).add(BigDecimal.valueOf(2.0))
+                .setScale(4, RoundingMode.HALF_UP);
+        log.debug("[MockYahooFinanceClient] getPostMarketPrice({}) → {}", symbol, postPrice);
+        return postPrice;
+    }
+
+    @Override
     public Map<String, Object> getQuote(String symbol) {
         BigDecimal price = seedPrice(symbol);
         Map<String, Object> meta = new HashMap<>();
@@ -98,6 +108,20 @@ public class MockYahooFinanceClient implements YahooFinanceClient {
         }
         log.debug("[MockYahooFinanceClient] getDailyBars({}) → {} bars", symbol, bars.size());
         return bars;
+    }
+
+    @Override
+    public Map<String, Object> getChartMeta(String symbol) {
+        BigDecimal price = seedPrice(symbol);
+        Map<String, Object> meta = new HashMap<>();
+        meta.put("regularMarketPrice", price.doubleValue());
+        meta.put("chartPreviousClose", price.subtract(BigDecimal.valueOf(2)).doubleValue());
+        // Simulate a post-market price ($2.50 above close) so MarketService tests
+        // can verify that postMarketPrice fields are populated.
+        meta.put("postMarketPrice", price.add(BigDecimal.valueOf(2.5)).doubleValue());
+        meta.put("symbol", symbol);
+        meta.put("shortName", symbol + " Index");
+        return meta;
     }
 
     // -------------------------------------------------------------------------

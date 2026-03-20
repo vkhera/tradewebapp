@@ -131,6 +131,7 @@ public class StockPricePredictionService {
 
         LocalDateTime baseHour = LocalDateTime.now(clock.withZone(EASTERN))
             .withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime madeAt = LocalDateTime.now(clock.withZone(EASTERN));
 
         // ── Market-index adjustment (computed once per prediction run) ─────────
         // The adjustment factor is a signed decimal (e.g. 0.005 = +0.5%).
@@ -171,7 +172,7 @@ public class StockPricePredictionService {
             hourlyPredictions.add(prediction);
 
             // Persist each technique's prediction to DB
-            persistTechniquesPredictions(symbol, baseHour, targetHour, breakdown, weights);
+            persistTechniquesPredictions(symbol, madeAt, targetHour, breakdown, weights);
         }
 
         // Save per-symbol prediction CSV

@@ -265,9 +265,9 @@ interface SuccessRate {
         </div>
       </div>
 
-      <!-- ── History Table (last 5 days) ── -->
+      <!-- ── History Table (last 10 days) ── -->
       <div class="history-section">
-        <h3>📋 Suggested Trades — Last 5 Days</h3>
+        <h3>📋 Suggested Trades — Last 10 Days</h3>
 
         <div *ngIf="historyLoading" class="loading-spinner">Loading history…</div>
 
@@ -275,7 +275,8 @@ interface SuccessRate {
           No suggestion history yet. History is populated as trades are suggested each day.
         </div>
 
-        <table *ngIf="!historyLoading && history.length > 0" class="history-table">
+        <div *ngIf="!historyLoading && history.length > 0" class="history-table-wrapper">
+        <table class="history-table">
           <thead>
             <tr>
               <th>Date</th>
@@ -325,6 +326,8 @@ interface SuccessRate {
             </tr>
           </tbody>
         </table>
+
+        </div>
 
         <!-- Stats row -->
         <div *ngIf="successRate && (successRate.totalResolved > 0 || successRate.pendingCount > 0)" class="stats-row">
@@ -690,6 +693,13 @@ interface SuccessRate {
       font-size: 0.9rem;
     }
 
+    .history-table-wrapper {
+      max-height: 400px;
+      overflow-y: auto;
+      border-radius: 8px;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.07);
+    }
+
     .history-table {
       width: 100%;
       border-collapse: collapse;
@@ -697,12 +707,14 @@ interface SuccessRate {
       background: #fff;
       border-radius: 8px;
       overflow: hidden;
-      box-shadow: 0 1px 8px rgba(0,0,0,0.07);
     }
 
     .history-table thead tr {
       background: #1a1a2e;
       color: #fff;
+      position: sticky;
+      top: 0;
+      z-index: 1;
     }
 
     .history-table th {

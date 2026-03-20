@@ -21,6 +21,25 @@ import { ApiService } from '../services/api.service';
           Download CSV
         </button>
       </div>
+
+      <!-- ── Market status bar ── -->
+      <div class="market-bar">
+        <span class="market-clock">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          {{ estTime }} ET
+        </span>
+        <span class="market-status-pill"
+              [class.pill-open]="marketStatus === 'OPEN'"
+              [class.pill-pre]="marketStatus === 'PRE_MARKET'"
+              [class.pill-post]="marketStatus === 'POST_MARKET'"
+              [class.pill-closed]="marketStatus === 'CLOSED'">
+          <span class="pill-dot"></span>
+          {{ marketStatusLabel }}
+        </span>
+      </div>
+
       
       <div *ngIf="loading" class="loading">Loading portfolio...</div>
       
@@ -47,7 +66,32 @@ import { ApiService } from '../services/api.service';
       <div *ngIf="!loading && portfolio.length === 0" class="empty-state">
         <p>No holdings yet. Start trading to build your portfolio!</p>
       </div>
-      
+
+      <!-- ── Index quotes bar ── -->
+      <div *ngIf="indices.length > 0" class="indices-bar">
+        <div *ngFor="let idx of indices" class="index-tile">
+          <span class="index-name">{{ idx.name }}</span>
+          <span class="index-price" *ngIf="idx.price != null">
+            {{ idx.price | number:'1.0-2' }}
+          </span>
+          <span class="index-price na" *ngIf="idx.price == null">—</span>
+          <ng-container *ngIf="idx.price != null && idx.change != null">
+            <span class="index-chg" [class.up]="idx.change >= 0" [class.dn]="idx.change < 0">
+              {{ idx.change >= 0 ? '+' : '' }}{{ idx.change | number:'1.2-2' }}
+              ({{ idx.changePct >= 0 ? '+' : '' }}{{ idx.changePct | number:'1.2-2' }}%)
+            </span>
+          </ng-container>
+          <!-- post-market badge shown only when post-market price differs from close -->
+          <span class="index-post" *ngIf="idx.postMarketPrice != null && marketStatus === 'POST_MARKET'"
+                [class.up]="idx.postMarketChange >= 0" [class.dn]="idx.postMarketChange < 0"
+                title="Post-market">
+            AH {{ idx.postMarketPrice | number:'1.0-2' }}
+            ({{ idx.postMarketChange >= 0 ? '+' : '' }}{{ idx.postMarketChangePct | number:'1.2-2' }}%)
+          </span>
+        </div>
+        <span *ngIf="indicesLoading" class="index-loading">Loading…</span>
+      </div>
+
       <!-- ── Filter bar ── -->
       <div *ngIf="!loading && portfolio.length > 0" class="filter-bar">
         <div class="filter-input-wrap">
@@ -79,6 +123,7 @@ import { ApiService } from '../services/api.service';
             <th>Quantity</th>
             <th>Avg Price</th>
             <th>Current Price</th>
+            <th title="After-hours price reported by Yahoo Finance. Only shown outside regular market hours.">Post-Market</th>
             <th>Total Value</th>
             <th>P/L</th>
             <th>P/L %</th>
@@ -89,7 +134,7 @@ import { ApiService } from '../services/api.service';
         </thead>
         <tbody>
           <tr *ngIf="filteredPortfolio.length === 0">
-            <td colspan="11" class="no-match">No holdings match current filters</td>
+            <td colspan="12" class="no-match">No holdings match current filters</td>
           </tr>
           <tr *ngFor="let holding of filteredPortfolio">
 
@@ -115,6 +160,17 @@ import { ApiService } from '../services/api.service';
             <td>{{ holding.quantity }}</td>
             <td>\${{ holding.averagePrice | number:'1.2-2' }}</td>
             <td>\${{ holding.currentPrice | number:'1.2-2' }}</td>
+            <td class="post-market-cell">
+              <ng-container *ngIf="holding.postMarketPrice != null">
+                <span class="post-market-price" [class.post-up]="holding.postMarketPrice > holding.currentPrice" [class.post-down]="holding.postMarketPrice < holding.currentPrice">
+                  \${{ holding.postMarketPrice | number:'1.2-2' }}
+                </span>
+                <span class="post-market-chg" [class.post-up]="holding.postMarketPrice > holding.currentPrice" [class.post-down]="holding.postMarketPrice < holding.currentPrice">
+                  {{ holding.postMarketPrice > holding.currentPrice ? '+' : '' }}{{ ((holding.postMarketPrice - holding.currentPrice) / holding.currentPrice * 100) | number:'1.2-2' }}%
+                </span>
+              </ng-container>
+              <span *ngIf="holding.postMarketPrice == null" class="atr-na">—</span>
+            </td>
             <td>\${{ holding.totalValue | number:'1.2-2' }}</td>
             <td [class.profit]="holding.profitLoss >= 0" [class.loss]="holding.profitLoss < 0">
               \${{ holding.profitLoss | number:'1.2-2' }}
@@ -165,16 +221,16 @@ import { ApiService } from '../services/api.service';
         </tbody>
         <tfoot *ngIf="summary">
           <tr class="total-row">
-            <td colspan="5"><strong>Total Invested</strong></td>
-            <td colspan="6"><strong>\${{ summary.totalInvestedValue | number:'1.2-2' }}</strong></td>
+            <td colspan="6"><strong>Total Invested</strong></td>
+            <td colspan="7"><strong>\${{ summary.totalInvestedValue | number:'1.2-2' }}</strong></td>
           </tr>
           <tr class="total-row">
-            <td colspan="5"><strong>Current Value</strong></td>
-            <td colspan="6"><strong>\${{ summary.totalPortfolioValue | number:'1.2-2' }}</strong></td>
+            <td colspan="6"><strong>Current Value</strong></td>
+            <td colspan="7"><strong>\${{ summary.totalPortfolioValue | number:'1.2-2' }}</strong></td>
           </tr>
           <tr class="total-row" [class.profit]="summary.totalProfitLoss >= 0" [class.loss]="summary.totalProfitLoss < 0">
-            <td colspan="5"><strong>Total P/L</strong></td>
-            <td colspan="6">
+            <td colspan="6"><strong>Total P/L</strong></td>
+            <td colspan="7">
               <strong>\${{ summary.totalProfitLoss | number:'1.2-2' }} ({{ summary.totalProfitLossPercent | number:'1.2-2' }}%)</strong>
             </td>
           </tr>
@@ -538,6 +594,13 @@ import { ApiService } from '../services/api.service';
     .atr-low   { color: #28a745; }   /* < 1 %  – low volatility */
     .atr-na    { color: #adb5bd; font-size: 0.85rem; }
 
+    /* ── Post-market price cell ── */
+    .post-market-cell { white-space: nowrap; }
+    .post-market-price { font-weight: 600; font-size: 0.9rem; display: block; }
+    .post-market-chg   { font-size: 0.75rem; display: block; }
+    .post-up  { color: #28a745; }
+    .post-down { color: #dc3545; }
+
     /* ── ATR filter dropdown ── */
     .atr-filter-wrap {
       display: flex; align-items: center; gap: 6px; flex: 0 0 auto;
@@ -581,6 +644,68 @@ import { ApiService } from '../services/api.service';
     .no-match {
       text-align: center; padding: 2rem; color: #6b7280; font-style: italic;
     }
+
+    /* ── Market status bar ── */
+    .market-bar {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 12px; padding: 8px 14px;
+      background: #1e293b; border-radius: 8px;
+      font-size: 0.82rem; color: #94a3b8;
+    }
+    .market-clock {
+      display: flex; align-items: center; gap: 5px;
+      font-weight: 600; color: #cbd5e1; letter-spacing: 0.01em;
+    }
+    .market-status-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 20px; font-weight: 700;
+      font-size: 0.77rem; letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .pill-dot {
+      width: 7px; height: 7px; border-radius: 50%; display: inline-block;
+    }
+    .pill-open    { background: rgba(16,185,129,0.18); color: #10b981; }
+    .pill-open    .pill-dot { background: #10b981; box-shadow: 0 0 6px #10b981; animation: blink 1.4s ease-in-out infinite; }
+    .pill-pre     { background: rgba(245,158,11,0.18); color: #f59e0b; }
+    .pill-pre     .pill-dot { background: #f59e0b; }
+    .pill-post    { background: rgba(99,102,241,0.22); color: #818cf8; }
+    .pill-post    .pill-dot { background: #818cf8; }
+    .pill-closed  { background: rgba(100,116,139,0.18); color: #64748b; }
+    .pill-closed  .pill-dot { background: #64748b; }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* ── Index quotes bar ── */
+    .indices-bar {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-bottom: 16px;
+    }
+    .index-tile {
+      display: flex; align-items: baseline; gap: 6px;
+      background: #1e293b; border-radius: 8px;
+      padding: 7px 14px; min-width: 160px; flex: 1 1 160px;
+      font-size: 0.82rem;
+    }
+    .index-name {
+      font-size: 0.75rem; font-weight: 700; color: #94a3b8;
+      text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap;
+    }
+    .index-price {
+      font-weight: 700; color: #f1f5f9; font-size: 0.88rem;
+    }
+    .index-price.na { color: #475569; }
+    .index-chg { font-size: 0.78rem; font-weight: 600; }
+    .index-chg.up { color: #10b981; }
+    .index-chg.dn  { color: #ef4444; }
+    .index-post {
+      font-size: 0.73rem; font-weight: 600; padding: 1px 5px;
+      border-radius: 4px; white-space: nowrap;
+    }
+    .index-post.up { background: rgba(16,185,129,0.15); color: #10b981; }
+    .index-post.dn  { background: rgba(239,68,68,0.15);  color: #ef4444; }
+    .index-loading { font-size: 0.8rem; color: #64748b; padding: 8px 0; }
   `]
 })
 export class PortfolioComponent implements OnInit, OnDestroy {
@@ -590,6 +715,15 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   totalValue = 0;
   filterText = '';
   atrFilter  = 'all';
+
+  // Market status & clock
+  estTime           = '';
+  marketStatus      = 'CLOSED';
+  marketStatusLabel = 'Closed';
+  indices:          any[] = [];
+  indicesLoading    = false;
+  private clockInterval:   any;
+  private indicesInterval: any;
 
   // Active popup state
   activeHolding: any = null;
@@ -634,6 +768,11 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     if (isPlatformBrowser(this.platformId)) {
+      this.updateClock();
+      this.clockInterval = setInterval(() => this.updateClock(), 1000);
+      this.loadIndices();
+      this.indicesInterval = setInterval(() => this.loadIndices(), 60_000);
+
       const clientId = localStorage.getItem('clientId');
       if (clientId) {
         this.loadPortfolio(parseInt(clientId));
@@ -646,6 +785,43 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.closePopup();
+    if (this.clockInterval)   clearInterval(this.clockInterval);
+    if (this.indicesInterval) clearInterval(this.indicesInterval);
+  }
+
+  /** Compute EST time + market session status entirely in the browser. */
+  private updateClock() {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: 'numeric', minute: '2-digit', hour12: true
+    }).formatToParts(now);
+    this.estTime = parts.map(p => p.value).join('').trim();
+
+    const estHourMin = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    }).format(now);
+    const [hStr, mStr] = estHourMin.split(':');
+    const totalMin = parseInt(hStr, 10) * 60 + parseInt(mStr, 10);
+
+    if      (totalMin >= 9 * 60 + 30 && totalMin < 16 * 60) {
+      this.marketStatus = 'OPEN';        this.marketStatusLabel = 'Open';
+    } else if (totalMin >= 4 * 60 && totalMin < 9 * 60 + 30) {
+      this.marketStatus = 'PRE_MARKET';  this.marketStatusLabel = 'Pre-Market';
+    } else if (totalMin >= 16 * 60 && totalMin < 20 * 60) {
+      this.marketStatus = 'POST_MARKET'; this.marketStatusLabel = 'Post-Market';
+    } else {
+      this.marketStatus = 'CLOSED';      this.marketStatusLabel = 'Closed';
+    }
+  }
+
+  loadIndices() {
+    this.indicesLoading = this.indices.length === 0;
+    this.apiService.getMarketIndices().subscribe({
+      next: (data) => { this.indices = data; this.indicesLoading = false; },
+      error: ()     => { this.indicesLoading = false; }
+    });
   }
 
   loadPortfolio(clientId: number) {

@@ -11,6 +11,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URI;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -37,6 +38,10 @@ public class RealYahooFinanceClient implements YahooFinanceClient {
     private record CachedPrice(BigDecimal price, long expiresAt) {}
     private static final long PRICE_CACHE_TTL_MS = 5 * 60 * 1_000L; // 5 minutes
     private final ConcurrentHashMap<String, CachedPrice> priceCache = new ConcurrentHashMap<>();
+
+    /** Post-market price cache: stores after-hours price (null when unavailable). */
+    private record CachedPostMarket(BigDecimal price, long expiresAt) {}
+    private final ConcurrentHashMap<String, CachedPostMarket> postMarketCache = new ConcurrentHashMap<>();
 
     public RealYahooFinanceClient() {
         this.restTemplate = new RestTemplate();
@@ -89,6 +94,89 @@ public class RealYahooFinanceClient implements YahooFinanceClient {
     }
 
     @Override
+    public BigDecimal getPostMarketPrice(String symbol) {
+        CachedPostMarket cached = postMarketCache.get(symbol);
+        if (cached != null && System.currentTimeMillis() < cached.expiresAt()) {
+            log.debug("Post-market cache hit for {}: {}", symbol, cached.price());
+            return cached.price();
+        }
+
+        BigDecimal postPrice = fetchPostMarketPrice(symbol);
+        // Only cache non-null values — a null result means post-market data is not yet
+        // available (e.g. right at 4 PM close).  Caching null would suppress the price
+        // for a full 5 minutes even after Yahoo Finance starts reporting it.
+        if (postPrice != null) {
+            postMarketCache.put(symbol, new CachedPostMarket(postPrice, System.currentTimeMillis() + PRICE_CACHE_TTL_MS));
+        }
+        return postPrice;
+    }
+
+    private BigDecimal fetchPostMarketPrice(String symbol) {
+        // v8/chart (query1) — primary; v7/quote is blocked (401)
+        BigDecimal price = extractPostMarketFromV8Chart(symbol, "query1");
+        if (price != null) return price;
+        // v8/chart (query2) — fallback CDN
+        return extractPostMarketFromV8Chart(symbol, "query2");
+    }
+
+    @SuppressWarnings("unchecked")
+    private BigDecimal extractPostMarketFromV8Chart(String symbol, String queryHost) {
+        try {
+            // Use 1-minute bars so we get the full intraday bar array including post-market entries.
+            // Yahoo Finance v8 chart meta does NOT surface postMarketPrice as a top-level field;
+            // the actual extended-hours price lives in the per-minute bar data after the regular
+            // session close (meta.currentTradingPeriod.post.start).
+            String url = "https://%s.finance.yahoo.com/v8/finance/chart/%s?interval=1m&range=1d&includePrePost=true"
+                    .formatted(queryHost, symbol);
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+            if (response == null) return null;
+            Map<String, Object> chart = (Map<String, Object>) response.get("chart");
+            if (chart == null) return null;
+            var results = (java.util.List<Map<String, Object>>) chart.get("result");
+            if (results == null || results.isEmpty()) return null;
+            Map<String, Object> result = results.getFirst();
+            Map<String, Object> meta = (Map<String, Object>) result.get("meta");
+            if (meta == null) return null;
+
+            // Determine the post-market window from meta.currentTradingPeriod.post
+            Map<String, Object> ctp = (Map<String, Object>) meta.get("currentTradingPeriod");
+            if (ctp == null) return null;
+            Map<String, Object> postPeriod = (Map<String, Object>) ctp.get("post");
+            if (postPeriod == null) return null;
+            long postStart = ((Number) postPeriod.get("start")).longValue();
+            long postEnd   = ((Number) postPeriod.get("end")).longValue();
+
+            var timestamps = (java.util.List<Number>) result.get("timestamp");
+            if (timestamps == null || timestamps.isEmpty()) return null;
+            Map<String, Object> indicators = (Map<String, Object>) result.get("indicators");
+            if (indicators == null) return null;
+            var quoteList = (java.util.List<Map<String, Object>>) indicators.get("quote");
+            if (quoteList == null || quoteList.isEmpty()) return null;
+            var closes = (java.util.List<Number>) quoteList.getFirst().get("close");
+            if (closes == null || closes.isEmpty()) return null;
+
+            // Walk backwards to find the most recent non-null close within the post-market window
+            int n = Math.min(timestamps.size(), closes.size());
+            for (int i = n - 1; i >= 0; i--) {
+                long ts = timestamps.get(i).longValue();
+                if (ts > postEnd) continue;    // beyond post-market window
+                if (ts < postStart) break;     // passed back before post-market started
+                Number closeNum = closes.get(i);
+                if (closeNum == null) continue;
+                double price = closeNum.doubleValue();
+                if (price > 0.0) {
+                    log.debug("Post-market price for {} via v8/chart {}: {} (ts={})", symbol, queryHost, price, ts);
+                    return BigDecimal.valueOf(price).setScale(4, RoundingMode.HALF_UP);
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            log.debug("Post-market price fetch failed for {} via {}: {}", symbol, queryHost, e.getMessage());
+            return null;
+        }
+    }
+
+    @Override
     public Map<String, Object> getQuote(String symbol) {
         try {
             String url = "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=1d"
@@ -98,6 +186,37 @@ public class RealYahooFinanceClient implements YahooFinanceClient {
         } catch (Exception e) {
             log.error("Error fetching quote for symbol: {}", symbol, e);
             return Map.of("error", "Failed to fetch quote");
+        }
+    }
+
+    @Override
+    public Map<String, Object> getChartMeta(String symbol) {
+        // URL-encode special characters used in index symbols (^ → %5E, = → %3D).
+        // RestTemplate.getForObject(String, Class) passes the literal string to URI.create()
+        // which does NOT re-encode already-percent-encoded sequences, so this is safe.
+        String encoded = symbol.replace("^", "%5E").replace("=", "%3D");
+        Map<String, Object> meta = extractFullMeta(encoded, "query1");
+        if (meta == null) meta = extractFullMeta(encoded, "query2");
+        return meta != null ? meta : Map.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> extractFullMeta(String encodedSymbol, String queryHost) {
+        try {
+            String url = "https://%s.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=1d&includePrePost=true"
+                    .formatted(queryHost, encodedSymbol);
+            // Use URI.create() so RestTemplate sends the pre-encoded symbol (e.g. %5E for ^)
+            // without double-encoding the percent sign to %25.
+            Map<String, Object> response = restTemplate.getForObject(URI.create(url), Map.class);
+            if (response == null) return null;
+            Map<String, Object> chart = (Map<String, Object>) response.get("chart");
+            if (chart == null) return null;
+            var results = (java.util.List<Map<String, Object>>) chart.get("result");
+            if (results == null || results.isEmpty()) return null;
+            return (Map<String, Object>) results.getFirst().get("meta");
+        } catch (Exception e) {
+            log.debug("extractFullMeta failed for {} via {}: {}", encodedSymbol, queryHost, e.getMessage());
+            return null;
         }
     }
 

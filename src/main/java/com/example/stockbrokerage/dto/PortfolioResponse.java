@@ -24,4 +24,9 @@ public class PortfolioResponse {
     private BigDecimal atr75;
     /** 90th-percentile of the 14 daily True Ranges used in ATR(14) – tail-risk day magnitude. */
     private BigDecimal atr90;
+    /**
+     * After-hours (post-market) price. {@code null} during regular market hours or when
+     * the exchange does not report post-market data for this symbol.
+     */
+    private BigDecimal postMarketPrice;
 }

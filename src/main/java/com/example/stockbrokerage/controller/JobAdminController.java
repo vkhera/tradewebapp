@@ -13,6 +13,7 @@ import com.example.stockbrokerage.repository.SwingStrategyWeightRepository;
 import com.example.stockbrokerage.repository.TrendPredictionWeightHistoryRepository;
 import com.example.stockbrokerage.service.DataSyncBatchService;
 import com.example.stockbrokerage.service.PredictionScoringService;
+import com.example.stockbrokerage.service.StockPricePredictionBatchService;
 import com.example.stockbrokerage.service.SuggestedTradeTrackingService;
 import com.example.stockbrokerage.service.SwingTradeTrackingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @RestController
@@ -42,17 +44,19 @@ public class JobAdminController {
     private final TrendPredictionWeightHistoryRepository trendWeightRepo;
 
     // ── Services (for manual triggers) ───────────────────────────────────────
-    private final SuggestedTradeTrackingService tradeTrackingService;
-    private final SwingTradeTrackingService     swingTrackingService;
-    private final DataSyncBatchService          dataSyncService;
-    private final PredictionScoringService      predictionScoringService;
+    private final SuggestedTradeTrackingService    tradeTrackingService;
+    private final SwingTradeTrackingService          swingTrackingService;
+    private final DataSyncBatchService               dataSyncService;
+    private final PredictionScoringService           predictionScoringService;
+    private final StockPricePredictionBatchService   predictionBatchService;
 
     // ── Job metadata (display info only) ─────────────────────────────────────
     private static final List<JobMeta> JOB_META = List.of(
             new JobMeta(SuggestedTradeTrackingService.JOB_NAME, "Trade Suggestion Check",  "Daily @ 06:00"),
             new JobMeta(SwingTradeTrackingService.JOB_NAME,     "Swing Trade Check",        "Daily @ 06:30"),
             new JobMeta(DataSyncBatchService.JOB_NAME,          "Market Data Sync",         "Daily @ 02:00 ET"),
-            new JobMeta(PredictionScoringService.JOB_NAME,      "Prediction Scoring",       "Weekdays @ 18:00")
+            new JobMeta(PredictionScoringService.JOB_NAME,      "Prediction Scoring",       "Weekdays @ 18:00"),
+            new JobMeta(StockPricePredictionBatchService.JOB_NAME, "Hourly Price Predictions", "Every 60 min")
     );
 
     private record JobMeta(String jobName, String displayName, String schedule) {}
@@ -96,21 +100,47 @@ public class JobAdminController {
         return ResponseEntity.ok(result);
     }
 
+    /** Jobs that run too long for a synchronous HTTP response — triggered in background. */
+    private static final Set<String> ASYNC_JOBS = Set.of(
+            DataSyncBatchService.JOB_NAME,
+            StockPricePredictionBatchService.JOB_NAME
+    );
+
     @PostMapping("/{jobName}/trigger")
     @Operation(summary = "Manually trigger a scheduled job")
     public ResponseEntity<Map<String, String>> triggerJob(@PathVariable String jobName) {
         log.info("Admin manual trigger requested for job '{}'", jobName);
-        try {
-            switch (jobName) {
-                case "TRADE_SUGGESTION_CHECK" -> tradeTrackingService.checkPendingSuggestions();
-                case "SWING_TRADE_CHECK"      -> swingTrackingService.evaluatePendingSwingTrades();
-                case "DATA_SYNC"             -> dataSyncService.syncPriceDataToDatabase();
-                case "PREDICTION_SCORING"    -> predictionScoringService.runTracked(LocalDate.now());
-                default -> {
-                    return ResponseEntity.badRequest()
-                            .body(Map.of("error", "Unknown job: " + jobName));
+
+        Runnable task = switch (jobName) {
+            case "TRADE_SUGGESTION_CHECK"  -> tradeTrackingService::checkPendingSuggestions;
+            case "SWING_TRADE_CHECK"       -> swingTrackingService::evaluatePendingSwingTrades;
+            case "DATA_SYNC"              -> dataSyncService::syncPriceDataToDatabase;
+            case "PREDICTION_SCORING"     -> () -> predictionScoringService.runTracked(LocalDate.now());
+            case "HOURLY_PRICE_PREDICTION" -> predictionBatchService::runHourlyPredictionBatch;
+            default -> null;
+        };
+
+        if (task == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Unknown job: " + jobName));
+        }
+
+        if (ASYNC_JOBS.contains(jobName)) {
+            // Long-running job — fire and forget; JobTracker records the outcome
+            CompletableFuture.runAsync(() -> {
+                try {
+                    task.run();
+                } catch (Exception e) {
+                    log.error("Async trigger of '{}' failed: {}", jobName, e.getMessage(), e);
                 }
-            }
+            });
+            return ResponseEntity.accepted()
+                    .body(Map.of("status", "accepted", "jobName", jobName,
+                                 "message", "Job started in background. Refresh in a moment."));
+        }
+
+        try {
+            task.run();
             return ResponseEntity.ok(Map.of("status", "triggered", "jobName", jobName));
         } catch (Exception e) {
             log.error("Manual trigger of '{}' failed: {}", jobName, e.getMessage(), e);
