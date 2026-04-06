@@ -51,6 +51,8 @@ public class StockPricePredictionService {
     /** 5-minute bars per hour – used to convert hourly predictions to bar steps. */
     private static final int    BARS_PER_HOUR   = 12;
     private static final int    PREDICT_HOURS   = 8;
+    private static final double PRICE_SANITY_MIN_RATIO = 0.4;
+    private static final double PRICE_SANITY_MAX_RATIO = 2.5;
     private static final DateTimeFormatter FMT  = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     static final String TECH_LINEAR_REGRESSION = "Linear_Regression";
@@ -126,7 +128,14 @@ public class StockPricePredictionService {
             return buildEmptyResponse(symbol);
         }
 
-        BigDecimal currentPrice = history.getLast();
+        BigDecimal historyLastPrice = history.getLast();
+        BigDecimal currentPrice = marketDataService.getCurrentPrice(symbol);
+        if (!isPriceWithinSanityBand(currentPrice, historyLastPrice)) {
+            log.error(
+                "Skipping prediction persistence for {} due to history/live mismatch (historyLast={}, liveCurrent={}).",
+                symbol, historyLastPrice, currentPrice);
+            return buildEmptyResponse(symbol);
+        }
         Map<String, Double> weights = loadWeights(symbol);
 
         LocalDateTime baseHour = LocalDateTime.now(clock.withZone(EASTERN))
@@ -372,6 +381,15 @@ public class StockPricePredictionService {
     private BigDecimal toPrice(double v) {
         if (Double.isNaN(v) || Double.isInfinite(v) || v <= 0) return BigDecimal.valueOf(0.01);
         return BigDecimal.valueOf(v).setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private boolean isPriceWithinSanityBand(BigDecimal referencePrice, BigDecimal candidatePrice) {
+        if (referencePrice == null || candidatePrice == null) return false;
+        if (referencePrice.compareTo(BigDecimal.ZERO) <= 0 || candidatePrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return false;
+        }
+        double ratio = candidatePrice.divide(referencePrice, 6, RoundingMode.HALF_UP).doubleValue();
+        return ratio >= PRICE_SANITY_MIN_RATIO && ratio <= PRICE_SANITY_MAX_RATIO;
     }
 
     // ============================================================= weight persistence

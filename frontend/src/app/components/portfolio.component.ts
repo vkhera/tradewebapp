@@ -12,14 +12,28 @@ import { ApiService } from '../services/api.service';
     <div class="portfolio-container">
       <div class="header">
         <h2>My Portfolio</h2>
-        <button (click)="downloadCSV()" class="download-btn" [disabled]="portfolio.length === 0">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          Download CSV
-        </button>
+        <div class="header-actions">
+          <button (click)="refreshPortfolioData()" class="refresh-btn" [disabled]="loading || refreshing">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
+              <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
+            </svg>
+            {{ refreshing ? 'Refreshing...' : 'Refresh Prices' }}
+          </button>
+          <span class="refresh-meta" *ngIf="lastRefreshedAt">
+            Updated {{ lastRefreshedAt | date:'shortTime' }}
+          </span>
+          <button (click)="downloadCSV()" class="download-btn" [disabled]="portfolio.length === 0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download CSV
+          </button>
+        </div>
       </div>
 
       <!-- ── Market status bar ── -->
@@ -368,6 +382,25 @@ import { ApiService } from '../services/api.service';
     .header {
       display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;
     }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .refresh-meta {
+      font-size: 0.82rem;
+      color: #64748b;
+      white-space: nowrap;
+    }
+    .refresh-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #2563eb;
+      padding: 10px 20px;
+    }
+    .refresh-btn:hover:not(:disabled) { background: #1d4ed8; }
+    .refresh-btn:disabled { background: #94a3b8; }
     .download-btn {
       display: flex; align-items: center; gap: 8px; background: #10b981; padding: 10px 20px;
     }
@@ -712,6 +745,8 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   portfolio: any[] = [];
   summary: any = null;
   loading = true;
+  refreshing = false;
+  lastRefreshedAt: Date | null = null;
   totalValue = 0;
   filterText = '';
   atrFilter  = 'all';
@@ -724,6 +759,8 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   indicesLoading    = false;
   private clockInterval:   any;
   private indicesInterval: any;
+  private portfolioInterval: any;
+  private refreshInFlight = false;
 
   // Active popup state
   activeHolding: any = null;
@@ -776,6 +813,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       const clientId = localStorage.getItem('clientId');
       if (clientId) {
         this.loadPortfolio(parseInt(clientId));
+        this.portfolioInterval = setInterval(() => this.refreshPortfolioData(false), 60_000);
       } else {
         // No session — redirect to login
         this.router.navigate(['/login']);
@@ -787,6 +825,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     this.closePopup();
     if (this.clockInterval)   clearInterval(this.clockInterval);
     if (this.indicesInterval) clearInterval(this.indicesInterval);
+    if (this.portfolioInterval) clearInterval(this.portfolioInterval);
   }
 
   /** Compute EST time + market session status entirely in the browser. */
@@ -824,7 +863,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     });
   }
 
-  loadPortfolio(clientId: number) {
+  loadPortfolio(clientId: number, onComplete?: () => void) {
     this.apiService.getPortfolioSummary(clientId).subscribe({
       next: (data) => {
         this.summary = data;
@@ -839,12 +878,37 @@ export class PortfolioComponent implements OnInit, OnDestroy {
           // Sort by total market value descending; zero-priced entries go to bottom
           .sort((a: any, b: any) => (b.totalValue || 0) - (a.totalValue || 0));
         this.totalValue = data.totalPortfolioValue;
+        this.lastRefreshedAt = new Date();
         this.loading = false;
         this.loadTrends();
+        onComplete?.();
       },
       error: (err) => {
         console.error('Error loading portfolio:', err);
         this.loading = false;
+        onComplete?.();
+      }
+    });
+  }
+
+  refreshPortfolioData(showIndicator = true) {
+    if (this.refreshInFlight) return;
+
+    const clientId = localStorage.getItem('clientId');
+    if (!clientId) {
+      this.router.navigate(['/login']);
+      return;
+    }
+
+    this.refreshInFlight = true;
+    if (showIndicator) {
+      this.refreshing = true;
+    }
+    this.loadIndices();
+    this.loadPortfolio(parseInt(clientId, 10), () => {
+      this.refreshInFlight = false;
+      if (showIndicator) {
+        this.refreshing = false;
       }
     });
   }
@@ -919,6 +983,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
         const currentPrice: number = data.currentPrice || holding.currentPrice;
         holding.predictions = (data.hourlyPredictions || [])
           .filter((p: any) => this.isDuringMarketHours(p.targetHour))
+          .filter((p: any) => this.isPredictionSane(p.predictedPrice, currentPrice))
           .map((p: any) => {
           const predicted: number = p.predictedPrice;
           const change = currentPrice > 0
@@ -985,6 +1050,14 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     const [hStr, mStr] = timePart.split(':');
     const totalMinutes = parseInt(hStr, 10) * 60 + parseInt(mStr, 10);
     return totalMinutes >= 540 && totalMinutes <= 960;
+  }
+
+  private isPredictionSane(predictedPrice: number, currentPrice: number): boolean {
+    if (!predictedPrice || !currentPrice || predictedPrice <= 0 || currentPrice <= 0) {
+      return false;
+    }
+    const ratio = predictedPrice / currentPrice;
+    return ratio >= 0.4 && ratio <= 2.5;
   }
 
   private formatHour(isoString: string): string {

@@ -93,7 +93,7 @@ class StockPricePredictionServiceTest {
     private static final List<BigDecimal> MOCK_HISTORY =
             MockYahooFinanceClient.generateDeterministicPrices(SYMBOL, 500);
 
-    private static final BigDecimal CURRENT_PRICE = BigDecimal.valueOf(53.52);
+        private static final BigDecimal CURRENT_PRICE = MOCK_HISTORY.getLast();
 
     // ========================================================================
     // Setup
@@ -208,6 +208,27 @@ class StockPricePredictionServiceTest {
         assertThat(response.getSymbol()).isEqualTo(SYMBOL);
         assertThat(response.getCurrentPrice()).isEqualByComparingTo(CURRENT_PRICE);
     }
+
+        @Test
+        void preMarket_historyLiveMismatch_skipsPersistenceAndReturnsEmptyPredictions() {
+                service.clock = fixedClock(2026, 3, 2, 8, 0, EASTERN);
+
+                List<BigDecimal> mismatchedHistory = new ArrayList<>();
+                for (int i = 0; i < 500; i++) {
+                        mismatchedHistory.add(BigDecimal.valueOf(165.00));
+                }
+                when(marketDataService.getPrices(eq(SYMBOL), anyInt())).thenReturn(mismatchedHistory);
+                when(marketDataService.getCurrentPrice(eq(SYMBOL))).thenReturn(BigDecimal.valueOf(46.10));
+
+                when(repository.findBySymbolAndTargetHourBetweenOrderByTargetHourAsc(eq(SYMBOL), any(), any()))
+                        .thenReturn(List.of());
+
+                StockPricePredictionResponse response = service.getPredictions(SYMBOL);
+
+                verify(repository, never()).save(any(StockPricePrediction.class));
+                assertThat(response.getCurrentPrice()).isEqualByComparingTo(BigDecimal.valueOf(46.10));
+                assertThat(response.getHourlyPredictions()).isEmpty();
+        }
 
     // ========================================================================
     // Scenario 2 – Mid-market (10:30 AM ET, Monday 2 March 2026)
