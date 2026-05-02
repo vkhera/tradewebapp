@@ -54,6 +54,18 @@ public class TrendPredictionResult {
     @Column(name = "volume_trend", length = 20)
     private String volumeTrend;
 
+    @Column(name = "index_momentum", length = 20)
+    private String indexMomentum;
+
+    @Column(name = "options_sentiment", length = 20)
+    private String optionsSentiment;
+
+    @Column(name = "news_sentiment", length = 20)
+    private String newsSentiment;
+
+    @Column(name = "etf_signal", length = 20)
+    private String etfSignal;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

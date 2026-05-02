@@ -5,7 +5,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * Represents a single suggested trade (sell + buy-back) for the portfolio.
@@ -60,4 +63,12 @@ public class SuggestedTradeResponse {
 
     /** Human-readable explanation of the suggestion. */
     private String reasoning;
+
+    /** ETF signal computed from BUZZ/HDGE/MMTM holdings changes (UPTREND/DOWNTREND/SIDEWAYS). */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String etfSignal;
+
+    /** Recent LLM-analyzed news items for this stock. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private List<NewsSentimentDto> recentNews;
 }

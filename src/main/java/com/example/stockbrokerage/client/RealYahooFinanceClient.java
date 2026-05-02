@@ -3,6 +3,7 @@ package com.example.stockbrokerage.client;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.stockbrokerage.dto.DailyBar;
+import com.example.stockbrokerage.dto.NewsItem;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.*;
@@ -12,11 +13,15 @@ import org.springframework.web.client.RestTemplate;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -264,6 +269,83 @@ public class RealYahooFinanceClient implements YahooFinanceClient {
         if (!bars.isEmpty()) return bars;
         log.info("query1 daily bars failed for {} — retrying via query2.finance.yahoo.com", symbol);
         return fetchDailyBarsFromHost(symbol, days, "query2");
+    }
+
+    @Override
+    public List<NewsItem> getRecentNews(String symbol, int lookbackDays) {
+        List<NewsItem> news = fetchNewsFromHost(symbol, lookbackDays, "query1");
+        if (!news.isEmpty()) return news;
+        log.info("query1 news endpoint failed for {} — retrying via query2.finance.yahoo.com", symbol);
+        return fetchNewsFromHost(symbol, lookbackDays, "query2");
+    }
+
+    private List<NewsItem> fetchNewsFromHost(String symbol, int lookbackDays, String queryHost) {
+        try {
+            String encodedSymbol = URLEncoder.encode(symbol, StandardCharsets.UTF_8);
+            String url = "https://%s.finance.yahoo.com/v1/finance/search?q=%s&quotesCount=0&newsCount=30"
+                .formatted(queryHost, encodedSymbol);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("User-Agent", USER_AGENT);
+            headers.set("Accept", "application/json");
+            headers.set("Accept-Language", "en-US,en;q=0.9");
+
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+            ResponseEntity<String> response =
+                restTemplate.exchange(URI.create(url), HttpMethod.GET, entity, String.class);
+
+            if (response.getStatusCode() != HttpStatus.OK || response.getBody() == null) {
+                log.warn("Yahoo Finance news endpoint ({}) returned {} for {}", queryHost, response.getStatusCode(), symbol);
+                return List.of();
+            }
+
+            return parseNewsResponse(response.getBody(), symbol, lookbackDays);
+        } catch (Exception e) {
+            log.warn("Failed to fetch news from {}.finance.yahoo.com for {}: {}", queryHost, symbol, e.getMessage());
+            return List.of();
+        }
+    }
+
+    private List<NewsItem> parseNewsResponse(String json, String symbol, int lookbackDays) {
+        List<NewsItem> items = new ArrayList<>();
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            JsonNode newsArray = root.path("news");
+            if (!newsArray.isArray() || newsArray.isEmpty()) {
+                return items;
+            }
+
+            LocalDateTime cutoff = LocalDateTime.now().minusDays(Math.max(1, lookbackDays));
+            for (JsonNode newsNode : newsArray) {
+                long publishEpoch = newsNode.path("providerPublishTime").asLong(0L);
+                LocalDateTime publishedAt = publishEpoch > 0
+                    ? Instant.ofEpochSecond(publishEpoch).atZone(ZoneId.of("America/New_York")).toLocalDateTime()
+                    : LocalDateTime.now();
+
+                if (publishedAt.isBefore(cutoff)) {
+                    continue;
+                }
+
+                String title = newsNode.path("title").asText("").trim();
+                if (title.isBlank()) {
+                    continue;
+                }
+
+                String link = newsNode.path("link").asText("").trim();
+                String uuid = newsNode.path("uuid").asText("").trim();
+                String summary = newsNode.path("summary").asText("").trim();
+                String publisher = newsNode.path("publisher").asText("").trim();
+
+                String externalId = !uuid.isBlank()
+                    ? uuid
+                    : Integer.toHexString(Objects.hash(symbol, title, link, publishEpoch));
+
+                items.add(new NewsItem(symbol, externalId, title, summary, publisher, link, publishedAt));
+            }
+        } catch (Exception e) {
+            log.warn("Error parsing Yahoo news response for {}: {}", symbol, e.getMessage());
+        }
+        return items;
     }
 
     private List<DailyBar> fetchDailyBarsFromHost(String symbol, int days, String queryHost) {

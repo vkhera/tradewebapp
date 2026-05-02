@@ -44,6 +44,10 @@ public class StartupJobCatchUpRunner implements ApplicationListener<ApplicationR
     private final DataSyncBatchService dataSyncService;
     private final PredictionScoringService predictionScoringService;
     private final DbBackupTriggerService dbBackupTriggerService;
+    private final TrendAnalysisBatchService trendAnalysisBatchService;
+    private final NewsSentimentBatchService newsSentimentBatchService;
+    private final LimitOrderScheduler limitOrderScheduler;
+    private final ReconciliationService reconciliationService;
 
     @Override
     public void onApplicationEvent(@org.springframework.lang.NonNull ApplicationReadyEvent event) {
@@ -54,6 +58,14 @@ public class StartupJobCatchUpRunner implements ApplicationListener<ApplicationR
                 swingTrackingService::evaluatePendingSwingTrades);
         checkAndRun(DataSyncBatchService.JOB_NAME,          25,
                 dataSyncService::syncPriceDataToDatabase);
+        checkAndRun(TrendAnalysisBatchService.JOB_NAME,      1,
+            trendAnalysisBatchService::runBatchTrendAnalysis);
+        checkAndRun(NewsSentimentBatchService.JOB_NAME,      30,
+            newsSentimentBatchService::runDailyNewsAnalysis);
+        checkAndRun(LimitOrderScheduler.JOB_NAME,            1,
+            limitOrderScheduler::processLimitOrders);
+        checkAndRun(ReconciliationService.JOB_NAME,          1,
+            reconciliationService::reconcileAccounts);
         // PREDICTION_SCORING: window is 25 h (fires at 18:00; extra buffer for weekends)
         checkAndRun(PredictionScoringService.JOB_NAME,      25,
                 () -> predictionScoringService.runTracked(java.time.LocalDate.now().minusDays(1)));

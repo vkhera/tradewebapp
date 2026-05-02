@@ -15,6 +15,13 @@ interface SuggestedTrade {
   suggestedBuyBackPrice: number | null;
   confidence: number;
   reasoning: string;
+  etfSignal?: string;
+  recentNews?: {
+    id: number; symbol: string; title: string; summary: string;
+    publisher: string; articleUrl: string; publishedAt: string;
+    sentiment: string; sentimentConfidence: number;
+    analysisReason: string; llmModel: string; analyzedAt: string;
+  }[];
 }
 
 interface SuggestedTradeHistory {
@@ -175,6 +182,26 @@ interface SuccessRate {
           <div class="reasoning">
             <div class="reasoning-label">Analysis</div>
             <div class="reasoning-text">{{ trade.reasoning }}</div>
+          </div>
+
+          <!-- ETF Signal badge -->
+          <div class="etf-signal-row" *ngIf="trade.etfSignal && trade.etfSignal !== 'SIDEWAYS'">
+            <span class="etf-signal-label">ETF Signal:</span>
+            <span class="badge" [ngClass]="trade.etfSignal === 'UPTREND' ? 'badge-bullish' : 'badge-bearish'">
+              {{ trade.etfSignal === 'UPTREND' ? '▲ Bullish (BUZZ/MMTM/HDGE)' : '▼ Bearish (BUZZ/MMTM/HDGE)' }}
+            </span>
+          </div>
+
+          <!-- Recent News mini-table -->
+          <div class="news-section" *ngIf="trade.recentNews && trade.recentNews.length > 0">
+            <div class="reasoning-label">Recent News</div>
+            <div class="news-list">
+              <div class="news-item" *ngFor="let n of trade.recentNews">
+                <span class="news-sentiment" [ngClass]="n.sentiment === 'POSITIVE' ? 'pos' : n.sentiment === 'NEGATIVE' ? 'neg' : 'neu'">{{ n.sentiment }}</span>
+                <a [href]="n.articleUrl" target="_blank" rel="noopener" class="news-title">{{ n.title }}</a>
+                <span class="news-pub">{{ n.publisher }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -652,6 +679,51 @@ interface SuccessRate {
       color: #444;
       line-height: 1.5;
     }
+
+    .etf-signal-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .etf-signal-label { font-size: 0.8rem; color: #555; }
+
+    .badge { padding: 2px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; }
+    .badge-bullish { background: #e6f4ea; color: #1e7e34; }
+    .badge-bearish { background: #fce8e6; color: #c5221f; }
+
+    .news-section {
+      margin-top: 12px;
+      background: #f8f9fa;
+      border-radius: 6px;
+      padding: 10px 14px;
+    }
+
+    .news-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+
+    .news-item {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      font-size: 0.82rem;
+      flex-wrap: wrap;
+    }
+
+    .news-sentiment {
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .news-sentiment.pos { background: #e6f4ea; color: #1e7e34; }
+    .news-sentiment.neg { background: #fce8e6; color: #c5221f; }
+    .news-sentiment.neu { background: #f1f3f4; color: #555; }
+
+    .news-title { color: #1a73e8; text-decoration: none; flex: 1; min-width: 180px; }
+    .news-title:hover { text-decoration: underline; }
+    .news-pub { color: #888; font-size: 0.75rem; white-space: nowrap; }
 
     .disclaimer {
       background: #fff3cd;

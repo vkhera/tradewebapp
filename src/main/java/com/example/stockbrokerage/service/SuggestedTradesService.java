@@ -1,8 +1,11 @@
 package com.example.stockbrokerage.service;
 
+import com.example.stockbrokerage.dto.NewsSentimentDto;
 import com.example.stockbrokerage.dto.SuggestedTradeResponse;
+import com.example.stockbrokerage.entity.NewsSentimentAnalysis;
 import com.example.stockbrokerage.entity.Portfolio;
 import com.example.stockbrokerage.entity.StockPricePrediction;
+import com.example.stockbrokerage.repository.NewsSentimentAnalysisRepository;
 import com.example.stockbrokerage.repository.PortfolioRepository;
 import com.example.stockbrokerage.repository.StockPricePredictionRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +42,8 @@ public class SuggestedTradesService {
     private final StockPricePredictionRepository   predictionRepository;
     private final StockPriceService                stockPriceService;
     private final AtrService                       atrService;
+    private final EtfActivityService               etfActivityService;
+    private final NewsSentimentAnalysisRepository  newsSentimentRepository;
 
     /**
      * Returns up to {@value #MAX_SUGGESTIONS} suggested trades for the given client.
@@ -69,9 +74,13 @@ public class SuggestedTradesService {
 
         // Sort by expected downside magnitude (most negative first), then cap at MAX_SUGGESTIONS
         candidates.sort(Comparator.comparing(SuggestedTradeResponse::getExpectedChangePct));
-        return candidates.size() > MAX_SUGGESTIONS
+        List<SuggestedTradeResponse> result = candidates.size() > MAX_SUGGESTIONS
             ? candidates.subList(0, MAX_SUGGESTIONS)
             : candidates;
+
+        // Enrich each suggestion with ETF signal and recent news
+        result.forEach(this::enrichWithMarketSignals);
+        return result;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -220,5 +229,37 @@ public class SuggestedTradesService {
         }
 
         return sb.toString();
+    }
+
+    private void enrichWithMarketSignals(SuggestedTradeResponse response) {
+        String symbol = response.getSymbol();
+        try {
+            // ETF signal from BUZZ/HDGE/MMTM
+            String etfSignal = etfActivityService.getEtfSignal(symbol).name();
+            response.setEtfSignal(etfSignal);
+        } catch (Exception e) {
+            log.debug("ETF signal unavailable for {}: {}", symbol, e.getMessage());
+        }
+        try {
+            // Recent news: last 3 days, up to 5 items
+            LocalDateTime since = LocalDateTime.now().minusDays(3);
+            List<NewsSentimentAnalysis> newsItems =
+                newsSentimentRepository.findBySymbolIgnoreCaseAndPublishedAtBetweenOrderByPublishedAtDesc(
+                    symbol, since, LocalDateTime.now());
+            if (!newsItems.isEmpty()) {
+                List<NewsSentimentDto> dtos = newsItems.stream()
+                    .limit(5)
+                    .map(n -> new NewsSentimentDto(
+                        n.getId(), n.getSymbol(), n.getTitle(), n.getSummary(),
+                        n.getPublisher(), n.getArticleUrl(), n.getPublishedAt(),
+                        n.getSentiment() != null ? n.getSentiment().name() : null,
+                        n.getSentimentConfidence(), n.getAnalysisReason(),
+                        n.getLlmModel(), n.getAnalyzedAt()))
+                    .toList();
+                response.setRecentNews(dtos);
+            }
+        } catch (Exception e) {
+            log.debug("News enrichment failed for {}: {}", symbol, e.getMessage());
+        }
     }
 }

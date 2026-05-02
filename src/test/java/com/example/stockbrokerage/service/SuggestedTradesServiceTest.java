@@ -17,8 +17,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.example.stockbrokerage.repository.NewsSentimentAnalysisRepository;
+
 /**
- * Unit tests for {@link SuggestedTradesService}.
  */
 class SuggestedTradesServiceTest {
 
@@ -35,7 +36,8 @@ class SuggestedTradesServiceTest {
         stockPriceService     = mock(StockPriceService.class);
         atrService            = mock(AtrService.class);
         service = new SuggestedTradesService(
-            portfolioRepository, predictionRepository, stockPriceService, atrService);
+            portfolioRepository, predictionRepository, stockPriceService, atrService,
+            mock(EtfActivityService.class), mock(NewsSentimentAnalysisRepository.class));
     }
 
     // ── Empty portfolio ───────────────────────────────────────────────────────

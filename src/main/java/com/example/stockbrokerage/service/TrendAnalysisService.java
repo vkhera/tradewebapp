@@ -22,7 +22,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +37,8 @@ public class TrendAnalysisService {
     private final TrendPredictionWeightHistoryRepository trendWeightHistoryRepository;
     private final MarketIndexService marketIndexService;
     private final OptionsDataService optionsDataService;
+    private final NewsSentimentService newsSentimentService;
+    private final EtfActivityService etfActivityService;
 
     // Technique names
     private static final String MA_CROSSOVER       = "MA_Crossover";
@@ -49,6 +50,10 @@ public class TrendAnalysisService {
     private static final String INDEX_MOMENTUM     = "Index_Momentum";
     /** Contrarian sentiment signal derived from options market put/call ratio and IV. */
     private static final String OPTIONS_SENTIMENT  = "Options_Sentiment";
+    /** Directional signal derived from recent LLM-scored company news. */
+    private static final String NEWS_SENTIMENT     = "News_Sentiment";
+    /** ETF holdings-change signal from BUZZ (social buzz), HDGE (short), MMTM (momentum). */
+    private static final String ETF_SIGNAL         = "ETF_Signal";
     
     @Transactional
     public TrendPrediction analyzeTrend(String symbol) {
@@ -75,6 +80,8 @@ public class TrendAnalysisService {
             techniqueResults.put(VOLUME_TREND,        calculateVolumeTrend(volumes));
             techniqueResults.put(INDEX_MOMENTUM,      calculateIndexMomentum(symbol));
             techniqueResults.put(OPTIONS_SENTIMENT,   calculateOptionsSentiment(symbol));
+            techniqueResults.put(NEWS_SENTIMENT,      calculateNewsSentiment(symbol));
+            techniqueResults.put(ETF_SIGNAL,           calculateEtfSignal(symbol));
 
         } catch (Exception e) {
             log.error("Error calculating trends for {}", symbol, e);
@@ -230,6 +237,28 @@ public class TrendAnalysisService {
         return TrendDirection.SIDEWAYS;
     }
 
+    private TrendDirection calculateNewsSentiment(String symbol) {
+        try {
+            TrendDirection direction = newsSentimentService.calculateNewsTrend(symbol, 5);
+            log.debug("News sentiment for {}: {}", symbol, direction);
+            return direction;
+        } catch (Exception e) {
+            log.debug("News sentiment unavailable for {}: {}", symbol, e.getMessage());
+            return TrendDirection.SIDEWAYS;
+        }
+    }
+
+    private TrendDirection calculateEtfSignal(String symbol) {
+        try {
+            TrendDirection direction = etfActivityService.getEtfSignal(symbol);
+            log.debug("ETF signal for {}: {}", symbol, direction);
+            return direction;
+        } catch (Exception e) {
+            log.debug("ETF signal unavailable for {}: {}", symbol, e.getMessage());
+            return TrendDirection.SIDEWAYS;
+        }
+    }
+
     private TrendDirection calculateVolumeTrend(List<Long> volumes) {
         if (volumes.size() < 20) {
             return TrendDirection.SIDEWAYS;
@@ -333,7 +362,7 @@ public class TrendAnalysisService {
             totalWeight += weight;
         }
         
-        double maxScore = scores.values().stream().max(Double::compare).orElse(0.0);
+        double maxScore = scores.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
         return totalWeight > 0 ? maxScore / totalWeight : 0.5;
     }
     
@@ -406,16 +435,18 @@ public class TrendAnalysisService {
         Path weightsPath = Paths.get(weightsFile);
         
         if (!Files.exists(weightsPath)) {
-            // Initialize with balanced weights across all seven techniques (total = 1.00)
-            weights.put(MA_CROSSOVER,      0.18);
-            weights.put(RSI,               0.18);
-            weights.put(MACD,              0.13);
-            weights.put(PRICE_MOMENTUM,    0.18);
-            weights.put(VOLUME_TREND,      0.08);
-            weights.put(INDEX_MOMENTUM,    0.12);
-            weights.put(OPTIONS_SENTIMENT, 0.13);
+            // Initialize with balanced weights across all nine techniques (total = 1.00)
+            weights.put(MA_CROSSOVER,      0.15);
+            weights.put(RSI,               0.14);
+            weights.put(MACD,              0.11);
+            weights.put(PRICE_MOMENTUM,    0.14);
+            weights.put(VOLUME_TREND,      0.07);
+            weights.put(INDEX_MOMENTUM,    0.11);
+            weights.put(OPTIONS_SENTIMENT, 0.10);
+            weights.put(NEWS_SENTIMENT,    0.10);
+            weights.put(ETF_SIGNAL,        0.08);
             saveWeights(symbol, weights);
-            log.info("Initialized default weights (incl. Index_Momentum, Options_Sentiment) for {}", symbol);
+            log.info("Initialized default weights (incl. ETF_Signal) for {}", symbol);
             return weights;
         }
         
@@ -442,8 +473,22 @@ public class TrendAnalysisService {
         // so existing per-symbol CSV files don't need to be migrated manually.
         weights.putIfAbsent(OPTIONS_SENTIMENT, 0.13);
         weights.putIfAbsent(INDEX_MOMENTUM,    0.12);
+        weights.putIfAbsent(NEWS_SENTIMENT,    0.11);
+        weights.putIfAbsent(ETF_SIGNAL,        0.08);
+
+        normalizeWeights(weights);
 
         return weights;
+    }
+
+    private void normalizeWeights(Map<String, Double> weights) {
+        double totalWeight = weights.values().stream().mapToDouble(Double::doubleValue).sum();
+        if (totalWeight <= 0.0) {
+            return;
+        }
+        for (Map.Entry<String, Double> entry : new HashMap<>(weights).entrySet()) {
+            weights.put(entry.getKey(), entry.getValue() / totalWeight);
+        }
     }
     
     private void saveWeights(String symbol, Map<String, Double> weights) {
@@ -491,12 +536,12 @@ public class TrendAnalysisService {
         
         try (PrintWriter writer = new PrintWriter(new FileWriter(filePath.toFile(), true))) {
             if (isNewFile) {
-                writer.println("Date,OverallTrend,Confidence,%s,%s,%s,%s,%s".formatted(
-                    MA_CROSSOVER, RSI, MACD, PRICE_MOMENTUM, VOLUME_TREND
+                writer.println("Date,OverallTrend,Confidence,%s,%s,%s,%s,%s,%s,%s,%s,%s".formatted(
+                    MA_CROSSOVER, RSI, MACD, PRICE_MOMENTUM, VOLUME_TREND, INDEX_MOMENTUM, OPTIONS_SENTIMENT, NEWS_SENTIMENT, ETF_SIGNAL
                 ));
             }
             
-            writer.println("%s,%s,%.4f,%s,%s,%s,%s,%s".formatted(
+            writer.println("%s,%s,%.4f,%s,%s,%s,%s,%s,%s,%s,%s,%s".formatted(
                 prediction.getPredictionDate().format(DATE_FORMATTER),
                 prediction.getOverallTrend(),
                 prediction.getConfidence(),
@@ -504,7 +549,11 @@ public class TrendAnalysisService {
                 prediction.getTechniqueResults().get(RSI),
                 prediction.getTechniqueResults().get(MACD),
                 prediction.getTechniqueResults().get(PRICE_MOMENTUM),
-                prediction.getTechniqueResults().get(VOLUME_TREND)
+                prediction.getTechniqueResults().get(VOLUME_TREND),
+                prediction.getTechniqueResults().get(INDEX_MOMENTUM),
+                prediction.getTechniqueResults().get(OPTIONS_SENTIMENT),
+                prediction.getTechniqueResults().get(NEWS_SENTIMENT),
+                prediction.getTechniqueResults().get(ETF_SIGNAL)
             ));
             
             log.debug("Saved prediction for {} to {}", prediction.getSymbol(), fileName);
@@ -525,6 +574,10 @@ public class TrendAnalysisService {
                 String.valueOf(results.get(MACD)),
                 String.valueOf(results.get(PRICE_MOMENTUM)),
                 String.valueOf(results.get(VOLUME_TREND)),
+                String.valueOf(results.get(INDEX_MOMENTUM)),
+                String.valueOf(results.get(OPTIONS_SENTIMENT)),
+                String.valueOf(results.get(NEWS_SENTIMENT)),
+                String.valueOf(results.get(ETF_SIGNAL)),
                 LocalDateTime.now()
             );
         } catch (Exception e) {
@@ -539,6 +592,10 @@ public class TrendAnalysisService {
         defaultResults.put(MACD, TrendDirection.SIDEWAYS);
         defaultResults.put(PRICE_MOMENTUM, TrendDirection.SIDEWAYS);
         defaultResults.put(VOLUME_TREND, TrendDirection.SIDEWAYS);
+        defaultResults.put(INDEX_MOMENTUM, TrendDirection.SIDEWAYS);
+        defaultResults.put(OPTIONS_SENTIMENT, TrendDirection.SIDEWAYS);
+        defaultResults.put(NEWS_SENTIMENT, TrendDirection.SIDEWAYS);
+        defaultResults.put(ETF_SIGNAL, TrendDirection.SIDEWAYS);
         
         return new TrendPrediction(
             symbol,
@@ -616,11 +673,14 @@ public class TrendAnalysisService {
                 String[] parts = lastLine.split(",");
                 if (parts.length >= 8) {
                     Map<String, TrendDirection> results = new HashMap<>();
-                    results.put(MA_CROSSOVER, TrendDirection.valueOf(parts[3]));
-                    results.put(RSI, TrendDirection.valueOf(parts[4]));
-                    results.put(MACD, TrendDirection.valueOf(parts[5]));
-                    results.put(PRICE_MOMENTUM, TrendDirection.valueOf(parts[6]));
-                    results.put(VOLUME_TREND, TrendDirection.valueOf(parts[7]));
+                    results.put(MA_CROSSOVER, parseTrend(parts, 3));
+                    results.put(RSI, parseTrend(parts, 4));
+                    results.put(MACD, parseTrend(parts, 5));
+                    results.put(PRICE_MOMENTUM, parseTrend(parts, 6));
+                    results.put(VOLUME_TREND, parseTrend(parts, 7));
+                    results.put(INDEX_MOMENTUM, parseTrend(parts, 8));
+                    results.put(OPTIONS_SENTIMENT, parseTrend(parts, 9));
+                    results.put(NEWS_SENTIMENT, parseTrend(parts, 10));
                     
                     return new TrendPrediction(
                         symbol,
@@ -637,5 +697,16 @@ public class TrendAnalysisService {
         }
         
         return null;
+    }
+
+    private TrendDirection parseTrend(String[] parts, int index) {
+        if (index >= parts.length) {
+            return TrendDirection.SIDEWAYS;
+        }
+        try {
+            return TrendDirection.valueOf(parts[index]);
+        } catch (Exception e) {
+            return TrendDirection.SIDEWAYS;
+        }
     }
 }

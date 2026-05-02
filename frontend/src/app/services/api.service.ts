@@ -41,6 +41,31 @@ export interface Rule {
   priority: number;
 }
 
+export interface NewsSentimentItem {
+  id: number;
+  symbol: string;
+  title: string;
+  summary: string;
+  publisher: string;
+  articleUrl: string;
+  publishedAt: string;
+  sentiment: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+  sentimentConfidence: number;
+  analysisReason: string;
+  llmModel: string;
+  analyzedAt: string;
+}
+
+export interface EtfChange {
+  etfName: string;
+  symbol: string;
+  action: 'Added' | 'Removed';
+  changeDate: string;
+  priceAtChange: number | null;
+  currentPrice: number | null;
+  result: string | null;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -300,5 +325,20 @@ export class ApiService {
 
   getWeightChanges(): Observable<any> {
     return this.http.get<any>(`${this.baseUrl}/admin/jobs/weight-changes`, this.getHttpOptions());
+  }
+
+  // News Sentiment API
+  getRecentNewsSentiment(lookbackDays: number = 1, symbol?: string): Observable<NewsSentimentItem[]> {
+    let url = `${this.baseUrl}/news-sentiment/recent?lookbackDays=${lookbackDays}`;
+    if (symbol) url += `&symbol=${encodeURIComponent(symbol)}`;
+    return this.http.get<NewsSentimentItem[]>(url, this.getHttpOptions());
+  }
+
+  getEtfActivityForSymbol(symbol: string): Observable<EtfChange[]> {
+    return this.http.get<EtfChange[]>(`${this.baseUrl}/news-sentiment/etf-activity/${encodeURIComponent(symbol)}`, this.getHttpOptions());
+  }
+
+  getAllEtfActivity(): Observable<EtfChange[]> {
+    return this.http.get<EtfChange[]>(`${this.baseUrl}/news-sentiment/etf-activity`, this.getHttpOptions());
   }
 }

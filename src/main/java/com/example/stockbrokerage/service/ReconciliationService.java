@@ -2,6 +2,7 @@ package com.example.stockbrokerage.service;
 
 import com.example.stockbrokerage.entity.Account;
 import com.example.stockbrokerage.entity.Client;
+import com.example.stockbrokerage.entity.JobExecutionRecord;
 import com.example.stockbrokerage.entity.Portfolio;
 import com.example.stockbrokerage.entity.Trade;
 import com.example.stockbrokerage.entity.Trade.TradeStatus;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,10 +29,12 @@ import java.util.Map;
 @Slf4j
 public class ReconciliationService {
     
+    public static final String JOB_NAME = "RECONCILIATION";
     private final TradeRepository tradeRepository;
     private final PortfolioRepository portfolioRepository;
     private final AccountRepository accountRepository;
     private final ClientRepository clientRepository;
+    private final JobTrackerService jobTracker;
     
     /**
      * Runs every minute to reconcile portfolio and account balances
@@ -39,6 +43,7 @@ public class ReconciliationService {
     @Transactional
     public void reconcileAccounts() {
         log.info("Starting account reconciliation");
+        JobExecutionRecord job = jobTracker.startJob(JOB_NAME, LocalDateTime.now());
         
         try {
             List<Client> allClients = clientRepository.findAll();
@@ -48,7 +53,9 @@ public class ReconciliationService {
             }
             
             log.info("Account reconciliation completed successfully");
+            jobTracker.completeJob(job);
         } catch (Exception e) {
+            jobTracker.failJob(job, e.getMessage());
             log.error("Error during account reconciliation", e);
         }
     }

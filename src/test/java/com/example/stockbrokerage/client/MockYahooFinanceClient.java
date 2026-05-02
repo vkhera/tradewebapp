@@ -1,6 +1,7 @@
 package com.example.stockbrokerage.client;
 
 import com.example.stockbrokerage.dto.DailyBar;
+import com.example.stockbrokerage.dto.NewsItem;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -108,6 +110,19 @@ public class MockYahooFinanceClient implements YahooFinanceClient {
         }
         log.debug("[MockYahooFinanceClient] getDailyBars({}) → {} bars", symbol, bars.size());
         return bars;
+    }
+
+    @Override
+    public List<NewsItem> getRecentNews(String symbol, int lookbackDays) {
+        LocalDateTime now = LocalDateTime.now();
+        return List.of(
+            new NewsItem(symbol, symbol + "-news-1", symbol + " posts strong earnings",
+                "Revenue and margin expansion beat estimates.", "MockWire",
+                "https://example.test/news/" + symbol + "/1", now.minusDays(1)),
+            new NewsItem(symbol, symbol + "-news-2", symbol + " announces product delay",
+                "Timeline slipped by one quarter due to supply-chain constraints.", "MockWire",
+                "https://example.test/news/" + symbol + "/2", now.minusDays(2))
+        );
     }
 
     @Override

@@ -21,6 +21,7 @@
     "frontend:test:postbuild": "npm --prefix ../frontend run build && playwright test --config ./functional/frontend/playwright.config.ts",
     "frontend:perf": "lhci autorun --config ./performance/frontend/lighthouserc.json",
     "api:functional": "tools\\k6\\k6-v1.6.1-windows-amd64\\k6.exe run ./functional/api/api-functional.k6.js",
+    "api:test:smh-buy": "tools\\k6\\k6-v1.6.1-windows-amd64\\k6.exe run ./functional/api/smh-buy-portfolio.k6.js",
     "api:perf:smoke": "tools\\k6\\k6-v1.6.1-windows-amd64\\k6.exe run ./performance/api/api-smoke.k6.js",
     "api:perf:load": "tools\\k6\\k6-v1.6.1-windows-amd64\\k6.exe run ./performance/api/api-load.k6.js",
     "quality:all": "npm-run-all -s quality:backend quality:frontend security:static security:deps frontend:test:postbuild api:functional api:perf:smoke",

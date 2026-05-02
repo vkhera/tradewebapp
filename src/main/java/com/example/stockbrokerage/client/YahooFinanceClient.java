@@ -1,6 +1,7 @@
 package com.example.stockbrokerage.client;
 
 import com.example.stockbrokerage.dto.DailyBar;
+import com.example.stockbrokerage.dto.NewsItem;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -47,6 +48,12 @@ public interface YahooFinanceClient {
      * Bars are ordered oldest → newest.
      */
     List<DailyBar> getDailyBars(String symbol, int days);
+
+    /**
+     * Fetch recent news articles for the given symbol.
+     * Returns only stories published within {@code lookbackDays} days.
+     */
+    List<NewsItem> getRecentNews(String symbol, int lookbackDays);
 
     /**
      * Fetch the raw {@code meta} map from the Yahoo Finance v8/chart endpoint for the

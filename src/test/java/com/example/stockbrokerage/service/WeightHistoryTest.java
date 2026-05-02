@@ -9,6 +9,7 @@ import com.example.stockbrokerage.repository.StockPredictionWeightRepository;
 import com.example.stockbrokerage.repository.TrendPredictionResultRepository;
 import com.example.stockbrokerage.repository.TrendPredictionWeightHistoryRepository;
 import com.example.stockbrokerage.repository.TrendPredictionWeightRepository;
+import com.example.stockbrokerage.service.EtfActivityService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -117,7 +118,9 @@ class WeightHistoryTest {
             trendWeightRepo,
             trendHistRepo,
             mock(MarketIndexService.class),
-            mock(OptionsDataService.class)
+            mock(OptionsDataService.class),
+            mock(NewsSentimentService.class),
+            mock(EtfActivityService.class)
         );
 
         // Invoke private saveWeights via reflection
@@ -149,7 +152,9 @@ class WeightHistoryTest {
             trendWeightRepo,
             trendHistRepo,
             mock(MarketIndexService.class),
-            mock(OptionsDataService.class)
+            mock(OptionsDataService.class),
+            mock(NewsSentimentService.class),
+            mock(EtfActivityService.class)
         );
 
         var method = TrendAnalysisService.class.getDeclaredMethod("saveWeights", String.class, Map.class);

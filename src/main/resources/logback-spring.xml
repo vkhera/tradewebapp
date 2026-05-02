@@ -78,14 +78,14 @@
     <!-- ═══════════════════════════════════════════════════════════════
          Per-package levels
          ═══════════════════════════════════════════════════════════════ -->
-    <logger name="com.example.stockbrokerage" level="DEBUG" additivity="false">
+    <logger name="com.example.stockbrokerage" level="INFO" additivity="false">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
         <appender-ref ref="FILE_JSON"/>
     </logger>
 
     <!-- Reduce Hibernate SQL noise – only in DEBUG for our package above -->
-    <logger name="org.hibernate.SQL"            level="DEBUG" additivity="false">
+    <logger name="org.hibernate.SQL"            level="WARN" additivity="false">
         <appender-ref ref="FILE_JSON"/>
     </logger>
     <logger name="org.hibernate.orm.jdbc.bind"  level="TRACE" additivity="false">

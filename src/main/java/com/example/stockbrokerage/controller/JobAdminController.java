@@ -12,10 +12,14 @@ import com.example.stockbrokerage.repository.PredictionDailyScoreRepository;
 import com.example.stockbrokerage.repository.SwingStrategyWeightRepository;
 import com.example.stockbrokerage.repository.TrendPredictionWeightHistoryRepository;
 import com.example.stockbrokerage.service.DataSyncBatchService;
+import com.example.stockbrokerage.service.LimitOrderScheduler;
+import com.example.stockbrokerage.service.NewsSentimentBatchService;
 import com.example.stockbrokerage.service.PredictionScoringService;
+import com.example.stockbrokerage.service.ReconciliationService;
 import com.example.stockbrokerage.service.StockPricePredictionBatchService;
 import com.example.stockbrokerage.service.SuggestedTradeTrackingService;
 import com.example.stockbrokerage.service.SwingTradeTrackingService;
+import com.example.stockbrokerage.service.TrendAnalysisBatchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +53,10 @@ public class JobAdminController {
     private final DataSyncBatchService               dataSyncService;
     private final PredictionScoringService           predictionScoringService;
     private final StockPricePredictionBatchService   predictionBatchService;
+    private final TrendAnalysisBatchService          trendBatchService;
+    private final LimitOrderScheduler                limitOrderScheduler;
+    private final ReconciliationService              reconciliationService;
+    private final NewsSentimentBatchService          newsSentimentBatchService;
 
     // ── Job metadata (display info only) ─────────────────────────────────────
     private static final List<JobMeta> JOB_META = List.of(
@@ -56,7 +64,11 @@ public class JobAdminController {
             new JobMeta(SwingTradeTrackingService.JOB_NAME,     "Swing Trade Check",        "Daily @ 06:30"),
             new JobMeta(DataSyncBatchService.JOB_NAME,          "Market Data Sync",         "Daily @ 02:00 ET"),
             new JobMeta(PredictionScoringService.JOB_NAME,      "Prediction Scoring",       "Weekdays @ 18:00"),
-            new JobMeta(StockPricePredictionBatchService.JOB_NAME, "Hourly Price Predictions", "Every 60 min")
+            new JobMeta(StockPricePredictionBatchService.JOB_NAME, "Hourly Price Predictions", "Every 60 min"),
+            new JobMeta(TrendAnalysisBatchService.JOB_NAME,     "Trend Analysis",           "Every 10 min"),
+            new JobMeta(LimitOrderScheduler.JOB_NAME,           "Limit Order Processor",    "Every 5 min"),
+            new JobMeta(ReconciliationService.JOB_NAME,         "Account Reconciliation",   "Every 1 min"),
+            new JobMeta(NewsSentimentBatchService.JOB_NAME,    "News Sentiment Analysis",  "Daily @ 02:15")
     );
 
     private record JobMeta(String jobName, String displayName, String schedule) {}
@@ -103,7 +115,9 @@ public class JobAdminController {
     /** Jobs that run too long for a synchronous HTTP response — triggered in background. */
     private static final Set<String> ASYNC_JOBS = Set.of(
             DataSyncBatchService.JOB_NAME,
-            StockPricePredictionBatchService.JOB_NAME
+            StockPricePredictionBatchService.JOB_NAME,
+            TrendAnalysisBatchService.JOB_NAME,
+            NewsSentimentBatchService.JOB_NAME
     );
 
     @PostMapping("/{jobName}/trigger")
@@ -112,11 +126,15 @@ public class JobAdminController {
         log.info("Admin manual trigger requested for job '{}'", jobName);
 
         Runnable task = switch (jobName) {
-            case "TRADE_SUGGESTION_CHECK"  -> tradeTrackingService::checkPendingSuggestions;
-            case "SWING_TRADE_CHECK"       -> swingTrackingService::evaluatePendingSwingTrades;
-            case "DATA_SYNC"              -> dataSyncService::syncPriceDataToDatabase;
-            case "PREDICTION_SCORING"     -> () -> predictionScoringService.runTracked(LocalDate.now());
-            case "HOURLY_PRICE_PREDICTION" -> predictionBatchService::runHourlyPredictionBatch;
+            case SuggestedTradeTrackingService.JOB_NAME  -> tradeTrackingService::checkPendingSuggestions;
+            case SwingTradeTrackingService.JOB_NAME       -> swingTrackingService::evaluatePendingSwingTrades;
+            case DataSyncBatchService.JOB_NAME              -> dataSyncService::syncPriceDataToDatabase;
+            case PredictionScoringService.JOB_NAME         -> () -> predictionScoringService.runTracked(LocalDate.now());
+            case StockPricePredictionBatchService.JOB_NAME -> predictionBatchService::runHourlyPredictionBatch;
+            case TrendAnalysisBatchService.JOB_NAME        -> trendBatchService::runBatchTrendAnalysis;
+            case NewsSentimentBatchService.JOB_NAME        -> newsSentimentBatchService::runDailyNewsAnalysis;
+            case LimitOrderScheduler.JOB_NAME              -> limitOrderScheduler::processLimitOrders;
+            case ReconciliationService.JOB_NAME            -> reconciliationService::reconcileAccounts;
             default -> null;
         };
 

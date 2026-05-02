@@ -48,4 +48,10 @@ public interface StockPriceCacheRepository extends JpaRepository<StockPriceCache
     Optional<StockPriceCache> findLastBarBefore(@Param("symbol") String symbol,
                                                 @Param("from") LocalDateTime from,
                                                 @Param("to") LocalDateTime to);
+
+       /** Removes bars older than the provided timestamp and returns deleted row count. */
+       @Transactional
+       @Modifying
+       @Query("DELETE FROM StockPriceCache s WHERE s.barTime < :cutoff")
+       int deleteByBarTimeBefore(@Param("cutoff") LocalDateTime cutoff);
 }

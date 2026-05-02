@@ -1,6 +1,7 @@
 package com.example.stockbrokerage.service;
 
 import com.example.stockbrokerage.dto.TrendPrediction.TrendDirection;
+import com.example.stockbrokerage.entity.JobExecutionRecord;
 import com.example.stockbrokerage.entity.Portfolio;
 import com.example.stockbrokerage.repository.PortfolioRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -19,9 +21,11 @@ import java.util.stream.Collectors;
 @Slf4j
 public class TrendAnalysisBatchService {
     
+    public static final String JOB_NAME = "TREND_ANALYSIS_BATCH";
     private final PortfolioRepository portfolioRepository;
     private final TrendAnalysisService trendAnalysisService;
     private final StockPriceService stockPriceService;
+    private final JobTrackerService jobTracker;
     
     /**
      * Runs trend analysis for all portfolio holdings every 10 minutes.
@@ -31,6 +35,7 @@ public class TrendAnalysisBatchService {
     @Scheduled(fixedRate = 600000, initialDelay = 10000) // 10 minutes = 600000ms, start after 10 seconds
     public void runBatchTrendAnalysis() {
         log.info("Starting scheduled trend analysis batch job");
+        JobExecutionRecord job = jobTracker.startJob(JOB_NAME, LocalDateTime.now());
         
         try {
             // Get all portfolios grouped by symbol for weight updates
@@ -38,6 +43,7 @@ public class TrendAnalysisBatchService {
             
             if (allPortfolios.isEmpty()) {
                 log.info("No portfolio holdings found, skipping trend analysis");
+                jobTracker.completeJob(job);
                 return;
             }
             
@@ -72,8 +78,10 @@ public class TrendAnalysisBatchService {
             }
 
             log.info("Completed scheduled trend analysis for {} symbols", portfoliosBySymbol.size());
+            jobTracker.completeJob(job);
             
         } catch (Exception e) {
+            jobTracker.failJob(job, e.getMessage());
             log.error("Error in batch trend analysis job", e);
         }
     }

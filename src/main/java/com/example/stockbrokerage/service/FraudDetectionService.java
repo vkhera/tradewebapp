@@ -1,7 +1,9 @@
 package com.example.stockbrokerage.service;
 
+import com.example.stockbrokerage.entity.Account;
 import com.example.stockbrokerage.entity.Client;
 import com.example.stockbrokerage.entity.Trade;
+import com.example.stockbrokerage.repository.AccountRepository;
 import com.example.stockbrokerage.repository.TradeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +23,7 @@ public class FraudDetectionService {
     
     private final TradeRepository tradeRepository;
     private final ClientService clientService;
+    private final AccountRepository accountRepository;
     
     public Map<String, Object> checkForFraud(Trade trade) {
         Map<String, Object> result = new HashMap<>();
@@ -66,8 +69,14 @@ public class FraudDetectionService {
             }
             
             // Check 5: Account balance check for BUY orders
+            // Use the Account entity (cashBalance / reservedBalance) which is the
+            // authoritative source of funds – NOT client.accountBalance which is
+            // a legacy denormalised field that does not reflect add-funds calls.
             if (trade.getType() == Trade.TradeType.BUY) {
-                if (client.getAccountBalance().compareTo(tradeValue) < 0) {
+                BigDecimal availableBalance = accountRepository.findByClientId(trade.getClientId())
+                    .map(Account::getAvailableBalance)
+                    .orElse(BigDecimal.ZERO);
+                if (availableBalance.compareTo(tradeValue) < 0) {
                     result.put("passed", false);
                     reasons.append("Insufficient account balance. ");
                 }

@@ -12,6 +12,7 @@ import { RealizedGainsComponent } from './components/realized-gains.component';
 import { UnrealizedGainsComponent } from './components/unrealized-gains.component';
 import { ImportDataComponent } from './components/import-data.component';
 import { SuggestedTradesComponent } from './components/suggested-trades.component';
+import { NewsComponent } from './components/news.component';
 import { authGuard, adminGuard } from './guards/auth.guard';
 
 export const routes: Routes = [
@@ -25,6 +26,7 @@ export const routes: Routes = [
   { path: 'fund-account',      component: FundAccountComponent,      canActivate: [authGuard] },
   { path: 'import-data',       component: ImportDataComponent,       canActivate: [authGuard] },
   { path: 'suggested-trades',  component: SuggestedTradesComponent,  canActivate: [authGuard] },
+  { path: 'news',              component: NewsComponent,             canActivate: [authGuard] },
   { path: 'admin/clients',     component: AdminClientsComponent,          canActivate: [adminGuard] },
   { path: 'admin/rules',       component: AdminRulesComponent,            canActivate: [adminGuard] },
   { path: 'admin/holdings',    component: AdminClientHoldingsComponent,   canActivate: [adminGuard] },

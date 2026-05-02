@@ -47,6 +47,17 @@ spring:
     type: redis
     redis:
       time-to-live: 600000
+  
+  # Task Scheduler Configuration
+  # Ensures that concurrent @Scheduled jobs don't block each other
+  task:
+    scheduling:
+      pool:
+        size: 8                                          # 8 threads for concurrent scheduled jobs
+      thread-name-prefix: batch-job-                    # Thread naming for debugging
+      shutdown:
+        await-termination: true
+        await-termination-period: 60s
 
 # Swagger/OpenAPI Configuration
 springdoc:
@@ -60,8 +71,8 @@ springdoc:
 logging:
   level:
     root: INFO
-    com.example.stockbrokerage: DEBUG
-    org.hibernate.SQL: DEBUG
+    com.example.stockbrokerage: INFO
+    org.hibernate.SQL: WARN
   # Console pattern includes traceId/spanId injected by Micrometer Tracing via MDC
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{traceId:-},%X{spanId:-}] - %msg%n"
@@ -70,6 +81,35 @@ logging:
     name: logs/stock-brokerage.log
     max-size: 10MB
     max-history: 30
+
+# Data/log housekeeping
+app:
+  maintenance:
+    stock-price-cache-retention:
+      enabled: true
+      days: 7
+    tmp-log-cleanup:
+      enabled: true
+      older-than-days: 2
+      log-dir: logs
+  news-analysis:
+    lookback-days: 5
+    cron: "0 15 2 * * *"
+    ollama:
+      url: ${OLLAMA_CHAT_URL:http://localhost:11434/api/chat}
+      fallback-url: ${OLLAMA_FALLBACK_URL:http://host.docker.internal:11434/api/chat}
+      model: ${OLLAMA_MODEL:gemma3:1b}
+      temperature: 0.2
+      max-retries: ${OLLAMA_MAX_RETRIES:2}
+      retry-delay-ms: ${OLLAMA_RETRY_DELAY_MS:350}
+      connect-timeout-ms: ${OLLAMA_CONNECT_TIMEOUT_MS:3000}
+      read-timeout-ms: ${OLLAMA_READ_TIMEOUT_MS:15000}
+  etf-dashboard:
+    url: ${ETF_DASHBOARD_URL:http://localhost:8000}
+    fallback-url: ${ETF_DASHBOARD_FALLBACK_URL:http://host.docker.internal:8000}
+    lookback-days: 7
+    max-retries: ${ETF_DASHBOARD_MAX_RETRIES:2}
+    retry-delay-ms: ${ETF_DASHBOARD_RETRY_DELAY_MS:250}
 
 # Management/Actuator endpoints
 management:
@@ -105,12 +145,32 @@ countryetf:
   - EWY
   - EWT
   - EWJ
+  - EWL
+  - GREK
 
 leveragedetfs:
   - TECL
   - TNA
   - TQQQ
   - SOXL
+  - FNGU
+  - BULZ
+  - FAS
+  - DUSL
+  - NAIL
+  - UTSL
+  - NUGT
+  - LABU
+  - YINN
+  - DRN
+  - DPST
+  - UDOW
+  - SPXL
+  - SPXS
+  - TMF
+  - AGQ
+  - BRZU
+  - YINN
 
 sectoretfs:
   - XLF
@@ -123,3 +183,17 @@ sectoretfs:
   - XLRE
   - XLU
   - VOX
+  - SMH
+  - RSP
+  - IWM
+  - TLTW
+  - GLD
+  - SLV
+  - DFAI
+  - PTY
+  - JQC
+  - XYLD
+  - RYLD
+  - QYLD
+  - QTUM
+  - KBWB

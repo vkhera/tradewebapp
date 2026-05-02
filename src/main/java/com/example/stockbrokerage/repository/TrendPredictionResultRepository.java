@@ -30,8 +30,8 @@ public interface TrendPredictionResultRepository extends JpaRepository<TrendPred
     @Modifying
     @Query(nativeQuery = true, value =
         "INSERT INTO trend_prediction_result " +
-        "  (symbol, prediction_date, overall_trend, confidence, ma_crossover, rsi, macd, price_momentum, volume_trend, created_at) " +
-        "VALUES (:symbol, :predictionDate, :overallTrend, :confidence, :maCrossover, :rsi, :macd, :priceMomentum, :volumeTrend, :createdAt) " +
+        "  (symbol, prediction_date, overall_trend, confidence, ma_crossover, rsi, macd, price_momentum, volume_trend, index_momentum, options_sentiment, news_sentiment, etf_signal, created_at) " +
+        "VALUES (:symbol, :predictionDate, :overallTrend, :confidence, :maCrossover, :rsi, :macd, :priceMomentum, :volumeTrend, :indexMomentum, :optionsSentiment, :newsSentiment, :etfSignal, :createdAt) " +
         "ON CONFLICT (symbol, prediction_date) DO UPDATE " +
         "SET overall_trend = EXCLUDED.overall_trend, " +
         "    confidence = EXCLUDED.confidence, " +
@@ -39,7 +39,11 @@ public interface TrendPredictionResultRepository extends JpaRepository<TrendPred
         "    rsi = EXCLUDED.rsi, " +
         "    macd = EXCLUDED.macd, " +
         "    price_momentum = EXCLUDED.price_momentum, " +
-        "    volume_trend = EXCLUDED.volume_trend")
+        "    volume_trend = EXCLUDED.volume_trend, " +
+        "    index_momentum = EXCLUDED.index_momentum, " +
+        "    options_sentiment = EXCLUDED.options_sentiment, " +
+        "    news_sentiment = EXCLUDED.news_sentiment, " +
+        "    etf_signal = EXCLUDED.etf_signal")
     void upsertResult(@Param("symbol") String symbol,
                       @Param("predictionDate") LocalDate predictionDate,
                       @Param("overallTrend") String overallTrend,
@@ -49,5 +53,9 @@ public interface TrendPredictionResultRepository extends JpaRepository<TrendPred
                       @Param("macd") String macd,
                       @Param("priceMomentum") String priceMomentum,
                       @Param("volumeTrend") String volumeTrend,
+                      @Param("indexMomentum") String indexMomentum,
+                      @Param("optionsSentiment") String optionsSentiment,
+                      @Param("newsSentiment") String newsSentiment,
+                      @Param("etfSignal") String etfSignal,
                       @Param("createdAt") LocalDateTime createdAt);
 }
