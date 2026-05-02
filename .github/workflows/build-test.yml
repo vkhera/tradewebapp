@@ -39,10 +39,6 @@ jobs:
 
       - name: Build and test
         run: mvn --batch-mode verify
-        env:
-          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/stockdb
-          SPRING_DATASOURCE_USERNAME: ${{ secrets.CI_DB_USER }}
-          SPRING_DATASOURCE_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
 
       - name: Upload test reports
         if: always()
