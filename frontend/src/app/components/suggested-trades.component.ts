@@ -56,6 +56,7 @@ interface SwingTradeSuggestion {
   suggestedDate: string;
   status: 'PENDING' | 'SUCCESS' | 'FAILED';
   resolvedDate: string | null;
+  currentMarketPrice: number | null;
 }
 
 interface SuccessRate {
@@ -377,6 +378,7 @@ interface SuccessRate {
               <th>Symbol</th>
               <th>Action</th>
               <th>Entry Price</th>
+              <th>Current Price</th>
               <th>Target Price</th>
               <th>Est. Return</th>
               <th>Confidence</th>
@@ -396,6 +398,7 @@ interface SuccessRate {
                 </span>
               </td>
               <td>\${{ h.currentPrice | number:'1.2-2' }}</td>
+              <td>{{ h.currentMarketPrice != null ? ('$' + (h.currentMarketPrice | number:'1.2-2')) : '—' }}</td>
               <td>\${{ h.targetPrice | number:'1.2-2' }}</td>
               <td class="positive">+{{ h.predictedReturnPct | number:'1.1-1' }}%</td>
               <td>{{ h.confidence }}%</td>

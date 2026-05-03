@@ -293,6 +293,12 @@ public class SwingTradeTrackingService {
     // ──────────────────────────────────────────────────────────────────────────
 
     private SwingTradeSuggestionResponse toResponse(SwingTradePrediction r) {
+        BigDecimal marketPrice = null;
+        try {
+            marketPrice = stockPriceService.getCurrentPrice(r.getSymbol());
+        } catch (Exception e) {
+            log.warn("Could not fetch current price for {} in swing history: {}", r.getSymbol(), e.getMessage());
+        }
         return SwingTradeSuggestionResponse.builder()
                 .id(r.getId())
                 .symbol(r.getSymbol())
@@ -311,6 +317,7 @@ public class SwingTradeTrackingService {
                 .resolvedDate(r.getResolvedDate())
                 .actualExitPrice(r.getActualExitPrice())
                 .actualReturnPct(r.getActualReturnPct())
+                .currentMarketPrice(marketPrice)
                 .build();
     }
 }

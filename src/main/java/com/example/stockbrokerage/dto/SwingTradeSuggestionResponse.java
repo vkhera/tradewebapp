@@ -80,4 +80,7 @@ public class SwingTradeSuggestionResponse {
 
     /** Actual return percentage at resolution. */
     private BigDecimal actualReturnPct;
+
+    /** Live market price fetched at the time the history record is served. */
+    private BigDecimal currentMarketPrice;
 }
