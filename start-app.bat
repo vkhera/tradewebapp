@@ -17,6 +17,8 @@ set SCRIPT_DIR=%~dp0
 REM ── Parse optional argument ───────────────────────────────────────
 set START_OBS=0
 if /I "%~1"=="obs" set START_OBS=1
+set COMPOSE_FILES=-f docker-compose.yml
+if "!START_OBS!"=="1" set COMPOSE_FILES=!COMPOSE_FILES! -f docker-compose.observability.yml
 
 echo.
 echo ====================================================================
@@ -39,7 +41,7 @@ echo   Docker is running.
 REM ── Step 2: Start PostgreSQL + Redis (+ optional observability) ───
 echo.
 echo [2/4] Starting PostgreSQL and Redis via Docker...
-docker compose up -d postgres redis --wait
+docker compose !COMPOSE_FILES! up -d postgres redis --wait
 if %errorlevel% neq 0 (
     echo   ERROR: Failed to start Docker containers.
     pause & exit /b 1
@@ -47,8 +49,8 @@ if %errorlevel% neq 0 (
 
 if "!START_OBS!"=="1" (
     echo.
-    echo [obs] Starting observability stack (Grafana / Prometheus / Loki / Tempo)...
-    docker compose -f docker-compose.observability.yml up -d
+    echo [obs] Observability overlay selected (Grafana / Prometheus / Loki / Tempo)...
+    docker compose !COMPOSE_FILES! up -d prometheus grafana loki promtail tempo
     if !errorlevel! neq 0 (
         echo   WARNING: Observability stack failed to start. Continuing anyway.
     ) else (
@@ -75,7 +77,7 @@ echo   Redis is ready.
 REM ── Step 3: Start Spring Boot Backend (Docker image) ────────────
 echo.
 echo [3/4] Starting Spring Boot backend (port 8080)...
-docker compose up -d backend --wait
+docker compose !COMPOSE_FILES! up -d backend --wait
 if %errorlevel% neq 0 (
     echo   ERROR: Backend container failed to become healthy.
     pause & exit /b 1
@@ -85,7 +87,7 @@ echo   Backend is UP at http://localhost:8080
 REM ── Step 4: Start Angular Frontend (Docker image) ────────────────
 echo.
 echo [4/4] Starting Angular frontend (port 80)...
-docker compose up -d frontend
+docker compose !COMPOSE_FILES! up -d frontend
 if %errorlevel% neq 0 (
     echo   ERROR: Frontend container failed to start.
     pause & exit /b 1

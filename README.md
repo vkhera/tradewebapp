@@ -34,8 +34,8 @@ It includes:
 ## Technology Stack
 
 ### Backend
-- Java 21 (JDK 21.0.8, compatible with 17+)
-- Spring Boot 3.2.1
+- Java 25 (release runtime)
+- Spring Boot 3.5.16
 - Spring Data JPA
 - Spring Security
 - Spring Scheduling
@@ -65,7 +65,7 @@ graph TB
         ADMIN[Admin UI\nClients · Rules · Trades]
     end
 
-    subgraph Backend["Spring Boot Backend (Java 21 · port 8080)"]
+    subgraph Backend["Spring Boot Backend (Java 25 · port 8080)"]
         direction TB
 
         subgraph API["REST Layer"]
@@ -208,14 +208,17 @@ graph LR
 ### Quick Start
 
 ```powershell
+# Pin the Docker image version used by docker-compose.yml.
+$env:APP_VERSION = "1.8.0"
+
 # Application only
 start-app.bat
 
 # Application + observability
 start-app.bat obs
 
-# Observability stack only (works with any app)
-docker compose -f docker-compose.observability.yml up -d
+# Application + observability using the Compose overlay
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
 
 # Stop application + observability
 stop-app.bat all
@@ -290,7 +293,7 @@ docker run -d `
 
 ## Prerequisites
 
-- **JDK 17 or higher** (Java 21+ recommended)
+- **JDK 17 or higher** (Java 25 recommended)
 - **Maven 3.9+**
 - **Node.js 18+** and npm
 - **Docker Desktop** (for PostgreSQL and Redis)

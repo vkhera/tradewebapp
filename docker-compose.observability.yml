@@ -4,9 +4,9 @@ version: '3.8'
 #  Observability Stack – Prometheus · Grafana · Loki · Promtail · Tempo
 #  100 % free, open-source tools; works with ANY application.
 #
-#  Usage:
-#    Start :  docker compose -f docker-compose.observability.yml up -d
-#    Stop  :  docker compose -f docker-compose.observability.yml down
+#  Usage with the application stack:
+#    Start :  docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+#    Stop  :  docker compose -f docker-compose.yml -f docker-compose.observability.yml down
 #
 #  Endpoints (all on localhost):
 #    Grafana    http://localhost:3000   admin / admin
@@ -32,6 +32,13 @@ version: '3.8'
 # ═══════════════════════════════════════════════════════════════════════════════
 
 services:
+
+  # ─── Application override – enable trace export when this file is included ─
+  backend:
+    environment:
+      TRACING_SAMPLING_PROBABILITY: "1.0"
+      TEMPO_HOST: host.docker.internal
+      TEMPO_ZIPKIN_PORT: "9411"
 
   # ─── Prometheus – metrics scraping ──────────────────────────────────────────
   prometheus:

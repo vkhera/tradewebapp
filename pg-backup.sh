@@ -33,16 +33,15 @@ CATCHUP_THRESHOLD=90000
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] $*"; }
 
 seconds_until_1600() {
-    now_h=$(date +%-H)
-    now_m=$(date +%-M)
-    now_s=$(date +%-S)
+    now_h=$((10#$(date +%H)))
+    now_m=$((10#$(date +%M)))
+    now_s=$((10#$(date +%S)))
     current_secs=$(( now_h * 3600 + now_m * 60 + now_s ))
-    target_secs=$(( 16 * 3600 ))   # 16:00:00
+    target_secs=$(( 16 * 3600 ))
 
     if [ "$current_secs" -lt "$target_secs" ]; then
         echo $(( target_secs - current_secs ))
     else
-        # Already past 4 PM today — wait until 4 PM tomorrow
         echo $(( 86400 - current_secs + target_secs ))
     fi
 }
@@ -146,7 +145,4 @@ while true; do
     sleep "$wait_secs"
 
     run_backup
-
-    # Sleep 23h to avoid running twice if the dump itself took < 1 s
-    sleep 82800
 done

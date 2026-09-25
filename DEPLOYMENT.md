@@ -11,7 +11,7 @@ One image, one command. PostgreSQL, Redis, Spring Boot and Angular nginx inside 
 docker run -d \
   -p 80:80 \
   --name stockapp \
-  vkdocker/stock-brokerage-allinone:latest
+   vkdocker/stock-brokerage-allinone:1.8.0
 ```
 
 - **Wait ~90 seconds** for all services to start (first boot initialises the database)
@@ -35,7 +35,7 @@ docker rm -f stockapp
 ```bash
 docker run -d -p 80:80 --name stockapp \
   -e JAVA_OPTS="-Xmx512m -Xms256m" \
-  vkdocker/stock-brokerage-allinone:latest
+   vkdocker/stock-brokerage-allinone:1.8.0
 ```
 
 **Size:** ~763 MB (includes PostgreSQL 16 + Redis 7 + JRE 21 + nginx + app)
@@ -51,8 +51,8 @@ Pull them on **any machine with Docker** — no Java, Maven, or Node.js needed.
 
 | Image | Tag | Size |
 |---|---|---|
-| `vkdocker/stock-brokerage-backend` | `latest` | ~394 MB |
-| `vkdocker/stock-brokerage-frontend` | `latest` | ~49 MB |
+| `vkdocker/stock-brokerage-backend` | `1.8.0` | ~394 MB |
+| `vkdocker/stock-brokerage-frontend` | `1.8.0` | ~49 MB |
 
 > **Private repositories:** Go to [hub.docker.com](https://hub.docker.com) › your repositories › Settings › Make Private for each image after pushing. Free Docker Hub accounts include 1 private repo; a Pro plan ($9/month) covers unlimited private repos.
 
@@ -89,8 +89,8 @@ mkdir config
 
 ```bash
 docker login --username vkdocker   # enter password when prompted
-docker pull vkdocker/stock-brokerage-backend:latest
-docker pull vkdocker/stock-brokerage-frontend:latest
+docker pull vkdocker/stock-brokerage-backend:1.8.0
+docker pull vkdocker/stock-brokerage-frontend:1.8.0
 ```
 
 ### Step 5 — Run the full stack
@@ -127,7 +127,8 @@ Wait ~90 seconds for the backend to initialise (schema creation + data seeding).
 ```bash
 docker compose down          # stop (data volumes preserved)
 docker compose down -v       # stop and DELETE all data
-docker compose pull && docker compose up -d   # update to latest images
+# Set APP_VERSION=1.8.0 in .env before starting the stack.
+docker compose pull && docker compose up -d
 ```
 
 ### JVM tuning via environment variable

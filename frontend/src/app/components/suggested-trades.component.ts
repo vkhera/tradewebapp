@@ -1,7 +1,8 @@
-﻿import { Component, OnInit } from '@angular/core';
+﻿import { Component, Inject, OnInit, PLATFORM_ID } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService, Client } from '../services/api.service';
+import { isPlatformBrowser } from '@angular/common';
 
 interface SuggestedTrade {
   symbol: string;
@@ -999,15 +1000,21 @@ export class SuggestedTradesComponent implements OnInit {
   swingLoading = false;
   swingError: string | null = null;
 
-  constructor(private apiService: ApiService) {}
+  constructor(
+    private apiService: ApiService,
+    @Inject(PLATFORM_ID) private platformId: Object
+  ) {}
 
   ngOnInit(): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
     this.isAdminUser = this.isAdmin();
     if (this.isAdminUser) {
       this.loadClientsForAdmin();
-      return;
+    } else {
+      this.loadAll();
     }
-    this.loadAll();
   }
 
   loadAll(): void {

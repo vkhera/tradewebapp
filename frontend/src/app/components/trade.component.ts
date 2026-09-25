@@ -362,6 +362,9 @@ export class TradeComponent implements OnInit {
   ) {}
 
   ngOnInit() {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
     this.loadRecentTrades();
     this.loadAccount();
   }
@@ -493,6 +496,9 @@ export class TradeComponent implements OnInit {
   }
 
   loadRecentTrades() {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
     const clientId = localStorage.getItem('clientId');
     if (clientId) {
       this.apiService.getTradesByClient(parseInt(clientId)).subscribe({

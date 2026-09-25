@@ -50,18 +50,19 @@ test.describe('Frontend screen coverage', () => {
     await bootstrapSession(page, 'CLIENT');
     await page.goto('/import-data');
 
-    const activityUploadInput = page.locator('input[type="file"]').nth(1);
+    const activitySection = page.locator('.import-section').filter({
+      has: page.getByRole('heading', { name: 'Import Activity' })
+    });
+
+    const activityUploadInput = activitySection.locator('input[type="file"]').first();
     await activityUploadInput.setInputFiles({
       name: 'activity-upload-test.csv',
       mimeType: 'text/csv',
       buffer: Buffer.from('Date,Action,Symbol,Quantity,Price\n2026-02-27,BUY,TQQQ,1,10.00\n')
     });
 
-    // The activity section is the last .import-section; scope the locator to it
-    // so the test doesn't depend on whether the holdings drop zone also has a file
-    const activitySection = page.locator('.import-section').last();
     await expect(activitySection.locator('.drop-zone-filename')).toContainText('.csv', { timeout: 15000 });
-    await expect(page.getByRole('button', { name: 'Import Activity' })).toBeEnabled();
+    await expect(activitySection.getByRole('button', { name: 'Import Activity' })).toBeEnabled();
   });
 
   test('login page renders and key controls are available', async ({ page }) => {
@@ -224,9 +225,12 @@ test.describe('Frontend screen coverage', () => {
       await expect(popup.locator('.tooltip-title')).toContainText('Price Forecasts');
 
       // Wait for table or no-data message (API response)
-      const predTable = popup.locator('.pred-table').first();
-      const noData    = popup.locator('.tooltip-no-data');
-      await expect(predTable.or(noData)).toBeVisible({ timeout: 20000 });
+      const predTable = popup.locator('table.pred-table:not(.prev-day-table)').first();
+      const noData = popup.locator('.tooltip-no-data');
+
+      await expect
+        .poll(async () => (await predTable.isVisible()) || (await noData.isVisible()), { timeout: 20000 })
+        .toBe(true);
 
       if (await predTable.isVisible()) {
         const rows = predTable.locator('tbody tr');

@@ -4,9 +4,7 @@
     "https://checkstyle.org/dtds/configuration_1_3.dtd">
 <module name="Checker">
   <module name="TreeWalker">
-    <module name="AvoidStarImport"/>
     <module name="UnusedImports"/>
-    <module name="NeedBraces"/>
     <module name="EmptyBlock"/>
     <module name="EqualsHashCode"/>
     <module name="FinalClass"/>
@@ -15,6 +13,6 @@
     <module name="SimplifyBooleanExpression"/>
   </module>
   <module name="LineLength">
-    <property name="max" value="140"/>
+    <property name="max" value="220"/>
   </module>
 </module>

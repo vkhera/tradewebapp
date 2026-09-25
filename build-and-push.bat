@@ -1,8 +1,7 @@
 @echo off
 REM ─────────────────────────────────────────────────────────
 REM  Build both Docker images and push to Docker Hub
-REM  Usage: build-and-push.bat [tag]
-REM  Default tag: latest
+REM  Usage: build-and-push.bat [version-tag]
 REM ─────────────────────────────────────────────────────────
 
 set REPO=vkdocker
@@ -11,7 +10,10 @@ set FRONTEND_IMAGE=%REPO%/stock-brokerage-frontend
 set ALLINONE_IMAGE=%REPO%/stock-brokerage-allinone
 set ALLINONE_OBS_IMAGE=%REPO%/stock-brokerage-allinone-obs
 set TAG=%1
-if "%TAG%"=="" set TAG=latest
+if "%TAG%"=="" (
+    echo ERROR: Provide an immutable version tag, for example 1.8.0.
+    exit /b 1
+)
 
 echo.
 echo =====================================================
@@ -39,7 +41,7 @@ if errorlevel 1 (
 REM ─── Build backend ───────────────────────────────────
 echo.
 echo [2/4] Building backend image...
-docker build -f Dockerfile.backend -t %BACKEND_IMAGE%:%TAG% -t %BACKEND_IMAGE%:latest .
+docker build -f Dockerfile.backend -t %BACKEND_IMAGE%:%TAG% .
 if errorlevel 1 (
     echo ERROR: Backend build failed.
     exit /b 1
@@ -49,7 +51,7 @@ echo OK — backend built.
 REM ─── Build frontend ──────────────────────────────────
 echo.
 echo [3/5] Building frontend image...
-docker build -f Dockerfile.frontend -t %FRONTEND_IMAGE%:%TAG% -t %FRONTEND_IMAGE%:latest .
+docker build -f Dockerfile.frontend -t %FRONTEND_IMAGE%:%TAG% .
 if errorlevel 1 (
     echo ERROR: Frontend build failed.
     exit /b 1
@@ -59,7 +61,7 @@ echo OK — frontend built.
 REM ─── Build all-in-one ────────────────────────────────────────────
 echo.
 echo [4/6] Building all-in-one image (this takes several minutes)...
-docker build -f Dockerfile.allinone -t %ALLINONE_IMAGE%:%TAG% -t %ALLINONE_IMAGE%:latest .
+docker build -f Dockerfile.allinone -t %ALLINONE_IMAGE%:%TAG% .
 if errorlevel 1 (
     echo ERROR: All-in-one build failed.
     exit /b 1
@@ -69,7 +71,7 @@ echo OK — all-in-one built.
 REM ─── Build all-in-one + observability ────────────────────────────
 echo.
 echo [5/6] Building all-in-one+obs image (this takes several minutes)...
-docker build -f Dockerfile.allinone-obs -t %ALLINONE_OBS_IMAGE%:%TAG% -t %ALLINONE_OBS_IMAGE%:latest .
+docker build -f Dockerfile.allinone-obs -t %ALLINONE_OBS_IMAGE%:%TAG% .
 if errorlevel 1 (
     echo ERROR: All-in-one+obs build failed.
     exit /b 1
@@ -80,13 +82,9 @@ REM ─── Push all ───────────────────
 echo.
 echo [6/6] Pushing images to Docker Hub...
 docker push %BACKEND_IMAGE%:%TAG%
-docker push %BACKEND_IMAGE%:latest
 docker push %FRONTEND_IMAGE%:%TAG%
-docker push %FRONTEND_IMAGE%:latest
 docker push %ALLINONE_IMAGE%:%TAG%
-docker push %ALLINONE_IMAGE%:latest
 docker push %ALLINONE_OBS_IMAGE%:%TAG%
-docker push %ALLINONE_OBS_IMAGE%:latest
 
 if errorlevel 1 (
     echo ERROR: Push failed.

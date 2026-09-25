@@ -1,5 +1,5 @@
-import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, ElementRef, Inject, OnInit, PLATFORM_ID, ViewChild } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../services/api.service';
 import { Router } from '@angular/router';
@@ -419,10 +419,14 @@ export class ImportDataComponent implements OnInit {
 
   constructor(
     private apiService: ApiService,
-    private router: Router
+    private router: Router,
+    @Inject(PLATFORM_ID) private platformId: Object
   ) {}
 
   ngOnInit(): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
     const storedRole = localStorage.getItem('role') || '';
     this.isAdmin = storedRole.toUpperCase() === 'ADMIN';
     if (!this.isAdmin) {
@@ -495,6 +499,9 @@ export class ImportDataComponent implements OnInit {
   }
   
   cleanupClient() {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
     if (!this.cleanupClientId) {
       alert('Please provide Client ID');
       return;

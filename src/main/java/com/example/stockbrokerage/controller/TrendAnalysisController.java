@@ -23,7 +23,9 @@ public class TrendAnalysisController {
     @PostMapping("/analyze")
     @Operation(
         summary = "Analyze trend (body)",
-        description = "Force a fresh trend analysis using 5 techniques (MA Crossover, RSI, MACD, Price Momentum, Volume Trend). Returns UPTREND / DOWNTREND / SIDEWAYS with per-technique confidence scores and adaptive weights."
+        description = "Force a fresh trend analysis using 5 techniques (MA Crossover, RSI, MACD, Price Momentum, "
+                + "Volume Trend). Returns UPTREND / DOWNTREND / SIDEWAYS with per-technique confidence scores and "
+                + "adaptive weights."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Trend prediction produced")
     public ResponseEntity<TrendPrediction> analyzeTrend(
@@ -49,7 +51,9 @@ public class TrendAnalysisController {
     @GetMapping("/last/{symbol}")
     @Operation(
         summary = "Get cached trend (fast)",
-        description = "Returns the last computed trend prediction from cache without recalculating. Used by the portfolio page for fast load. Falls back to a fresh calculation only if no cache exists. Batch scheduler refreshes cache every day at 4:30 PM ET."
+        description = "Returns the last computed trend prediction from cache without recalculating. Used by the "
+                + "portfolio page for fast load. Falls back to a fresh calculation only if no cache exists. Batch "
+                + "scheduler refreshes cache every day at 4:30 PM ET."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Cached or freshly computed trend prediction")
     public ResponseEntity<TrendPrediction> getLastPrediction(

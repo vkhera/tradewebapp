@@ -38,10 +38,11 @@ spring:
         order_inserts: true
         order_updates: true
         
-  redis:
-    host: ${REDIS_HOST:localhost}
-    port: ${REDIS_PORT:6379}
-    timeout: 2000ms
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
     
   cache:
     type: redis
@@ -126,13 +127,14 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
-    export:
-      prometheus:
+  prometheus:
+    metrics:
+      export:
         enabled: true
   # Distributed tracing – sends spans to Tempo (Zipkin-compatible ingest on :9411)
   tracing:
     sampling:
-      probability: 1.0          # 100 % sampling; lower to 0.1 in production
+      probability: ${TRACING_SAMPLING_PROBABILITY:0.0}
   # Distributed traces are sent to Tempo via Zipkin protocol.
   # When running locally:  Tempo on localhost:9411 (docker-compose.observability.yml)
   # When running in Docker: set TEMPO_HOST=host.docker.internal in docker-compose.yml

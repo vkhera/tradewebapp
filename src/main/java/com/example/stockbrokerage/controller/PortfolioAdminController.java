@@ -1,7 +1,6 @@
 package com.example.stockbrokerage.controller;
 
 import com.example.stockbrokerage.dto.ClientHoldingResponse;
-import com.example.stockbrokerage.entity.Portfolio;
 import com.example.stockbrokerage.repository.PortfolioRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

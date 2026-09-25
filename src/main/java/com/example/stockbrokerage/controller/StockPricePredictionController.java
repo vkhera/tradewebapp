@@ -53,7 +53,9 @@ public class StockPricePredictionController {
     @PostMapping("/{symbol}/refresh")
     @Operation(
         summary = "Refresh predictions (force recalculate)",
-        description = "Bypasses the cache, fetches fresh 5-min bars from Yahoo Finance, and recalculates all 5 technique predictions. Also resolves any past predictions and updates adaptive weights. Slower than GET – intended for manual refresh or testing."
+        description = "Bypasses the cache, fetches fresh 5-min bars from Yahoo Finance, and recalculates all 5 technique "
+                + "predictions. Also resolves any past predictions and updates adaptive weights. Slower than GET – "
+                + "intended for manual refresh or testing."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Freshly calculated predictions (cached=false)")
     public ResponseEntity<StockPricePredictionResponse> refreshPredictions(

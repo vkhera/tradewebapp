@@ -15,6 +15,8 @@ REM ── Parse optional argument ───────────────
 set STOP_OBS=0
 if /I "%~1"=="obs" set STOP_OBS=1
 if /I "%~1"=="all" set STOP_OBS=1
+set COMPOSE_FILES=-f docker-compose.yml
+if "!STOP_OBS!"=="1" set COMPOSE_FILES=!COMPOSE_FILES! -f docker-compose.observability.yml
 
 echo.
 echo ====================================================================
@@ -69,7 +71,7 @@ REM ── Step 5 (optional): Stop Observability Stack ────────�
 if "!STOP_OBS!"=="1" (
     echo.
     echo [obs] Stopping observability stack (Grafana / Prometheus / Loki / Tempo)...
-    docker compose -f docker-compose.observability.yml down
+    docker compose !COMPOSE_FILES! down
     if !errorlevel! equ 0 (
         echo   Observability stack stopped.
     ) else (

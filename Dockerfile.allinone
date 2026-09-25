@@ -10,7 +10,7 @@
 # ═══════════════════════════════════════════════════════════════════════════
 
 # ── Stage 1: Build Spring Boot JAR ─────────────────────────────────────────
-FROM maven:3.9-eclipse-temurin-21 AS backend-build
+FROM maven:3.9-eclipse-temurin-25 AS backend-build
 WORKDIR /workspace
 COPY pom.xml .
 RUN mvn -B dependency:go-offline -q
@@ -35,7 +35,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         postgresql-16 \
         redis-server \
-        openjdk-21-jre-headless \
+        openjdk-25-jre-headless \
         nginx \
         supervisor \
         curl \

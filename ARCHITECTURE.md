@@ -43,7 +43,7 @@ graph TB
         end
 
         subgraph BETier["Backend Tier"]
-            SB["🌿 Spring Boot 3.2 · ☕ Java 21\n:8080\n16 Controllers · 30+ Services\n📊 /actuator/metrics /health"]:::backend
+            SB["🌿 Spring Boot 3.5 · ☕ Java 25\n:8080\n16 Controllers · 30+ Services\n📊 /actuator/metrics /health"]:::backend
         end
 
         subgraph DataTier["Data Tier"]

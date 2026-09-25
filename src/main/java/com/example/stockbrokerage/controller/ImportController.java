@@ -78,7 +78,9 @@ public class ImportController {
     @PostMapping("/activity")
     @Operation(
         summary = "Import activity from CSV",
-        description = "Reads a Schwab-format activity/transaction CSV file, creates trade records for the given client, and returns a summary. IIAXX (cash sweep) entries are skipped automatically. Symbol is extracted from the first word of the Description column."
+        description = "Reads a Schwab-format activity/transaction CSV file, creates trade records for the given client, "
+                + "and returns a summary. IIAXX (cash sweep) entries are skipped automatically. Symbol is extracted "
+                + "from the first word of the Description column."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Import complete"),
