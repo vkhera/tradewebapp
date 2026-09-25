@@ -2,9 +2,9 @@ name: Build & Test
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 jobs:
   backend:
@@ -16,8 +16,8 @@ jobs:
         image: postgres:15
         env:
           POSTGRES_DB: stockdb
-          POSTGRES_USER: ${{ secrets.CI_DB_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
         ports:
           - 5432:5432
         options: >-
@@ -38,6 +38,11 @@ jobs:
           cache: maven
 
       - name: Build and test
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: ci_user
+          DB_PASS: ci_password
         run: mvn --batch-mode verify
 
       - name: Upload test reports
@@ -69,3 +74,7 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build -- --configuration production
+
+      - name: Type-check
+        working-directory: frontend
+        run: npx tsc -p tsconfig.app.json --noEmit

@@ -1,0 +1,95 @@
+name: Quality & Security
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Static quality and security
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: temurin
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Semgrep
+        run: python -m pip install --upgrade semgrep
+
+      - name: Checkstyle
+        run: mvn --batch-mode org.apache.maven.plugins:maven-checkstyle-plugin:3.3.1:check -Dcheckstyle.config.location=quality/config/checkstyle.xml -Dcheckstyle.failOnViolation=true
+
+      - name: PMD
+        run: mvn --batch-mode org.apache.maven.plugins:maven-pmd-plugin:3.21.2:check -Dpmd.rulesets=quality/config/pmd-ruleset.xml -Dpmd.targetJdk=17
+
+      - name: Semgrep
+        run: semgrep scan --config quality/static-security/semgrep.yml src frontend/src
+
+      - name: Frontend type-check
+        working-directory: frontend
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: npm audit
+        run: npm audit --prefix frontend --audit-level=moderate
+
+  dependency-scan:
+    name: Dependency scan
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: temurin
+          cache: maven
+
+      - name: OWASP dependency check
+        run: >-
+          mvn --batch-mode
+          org.owasp:dependency-check-maven:check
+          -Dformat=HTML
+          -DoutputDirectory=quality/reports/dependency-check
+
+      - name: Upload dependency report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dependency-check-report
+          path: quality/reports/dependency-check/
+          if-no-files-found: ignore
