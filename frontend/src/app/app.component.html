@@ -284,6 +284,13 @@
         </svg>
         <span>Jobs</span>
       </a>
+      <a *ngIf="isAdmin()" routerLink="/admin/llms" routerLinkActive="active" (click)="closeMenu()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 3h6l1 4h3v4h-2l-1 10H8L7 11H5V7h3l1-4Z"/>
+          <path d="M9 7h6"/>
+        </svg>
+        <span>LLMs</span>
+      </a>
       <span class="nav-user">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>

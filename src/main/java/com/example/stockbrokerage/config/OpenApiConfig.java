@@ -63,7 +63,9 @@ public class OpenApiConfig {
                 new Tag().name("Authentication").description("Login and session management"),
                 new Tag().name("Accounts").description("Client cash account operations (fund / withdraw)"),
                 new Tag().name("Portfolio").description("Portfolio holdings, P/L and summary"),
-                new Tag().name("Stocks").description("Real-time stock price and quote lookup \u2014 4-endpoint Yahoo Finance fallback (query1 v7/quote \u2192 query1 v8/chart \u2192 query2 v6/quote \u2192 query2 v8/chart)"),
+                        new Tag().name("Stocks").description(
+                                "Real-time stock price and quote lookup "
+                                        + "(query1 v7/quote -> query1 v8/chart -> query2 v6/quote -> query2 v8/chart)"),
                 new Tag().name("Trades").description("Order submission, status and history"),
                 new Tag().name("Suggested Trades").description("AI-powered trade suggestions based on ATR(14) and 8-hour price predictions"),
                 new Tag().name("Trend Analysis").description("Multi-technique stock trend analysis with adaptive per-stock weights"),

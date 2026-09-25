@@ -107,12 +107,13 @@ test.describe('Admin user – functional UI tests', () => {
 
   test.describe('2. Admin navigation and screen availability', () => {
 
-    test('admin nav bar shows Manage Clients, Manage Rules, and Client Holdings links', async ({ page }) => {
+    test('admin nav bar shows Manage Clients, Manage Rules, Client Holdings, and LLMs links', async ({ page }) => {
       await bootstrapAdmin(page);
       await page.goto('/admin/clients');
       await expect(page.getByRole('link', { name: /Manage Clients/i })).toBeVisible();
       await expect(page.getByRole('link', { name: /Manage Rules/i })).toBeVisible();
       await expect(page.getByRole('link', { name: /Client Holdings/i })).toBeVisible();
+      await expect(page.getByRole('link', { name: /^LLMs$/i })).toBeVisible();
     });
 
     test('admin can navigate to /admin/clients – Client Management heading visible', async ({ page }) => {
@@ -131,6 +132,14 @@ test.describe('Admin user – functional UI tests', () => {
       await bootstrapAdmin(page);
       await page.goto('/admin/holdings');
       await expect(page.getByRole('heading', { name: 'Client Holdings' })).toBeVisible();
+    });
+
+    test('admin can navigate to /admin/llms – LLM settings are visible', async ({ page }) => {
+      await bootstrapAdmin(page);
+      await page.goto('/admin/llms');
+      await expect(page.getByRole('heading', { name: 'LLMs' })).toBeVisible();
+      await expect(page.getByLabel('Model name')).toBeVisible();
+      await expect(page.getByLabel('Ollama chat endpoint')).toBeVisible();
     });
 
     test('non-admin (client5) is redirected away from /admin/clients', async ({ page }) => {

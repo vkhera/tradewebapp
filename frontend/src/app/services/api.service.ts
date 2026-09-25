@@ -56,6 +56,11 @@ export interface NewsSentimentItem {
   analyzedAt: string;
 }
 
+export interface OllamaSettings {
+  model: string;
+  endpoint: string;
+}
+
 export interface EtfChange {
   etfName: string;
   symbol: string;
@@ -165,6 +170,15 @@ export class ApiService {
 
   deleteRule(id: number): Observable<void> {
     return this.http.delete<void>(`${this.adminUrl}/rules/${id}`, this.getHttpOptions());
+  }
+
+  // Ollama news-analysis settings
+  getOllamaSettings(): Observable<OllamaSettings> {
+    return this.http.get<OllamaSettings>(`${this.adminUrl}/llm-settings`, this.getHttpOptions());
+  }
+
+  updateOllamaSettings(settings: OllamaSettings): Observable<OllamaSettings> {
+    return this.http.put<OllamaSettings>(`${this.adminUrl}/llm-settings`, settings, this.getHttpOptions());
   }
 
   // Authentication APIs

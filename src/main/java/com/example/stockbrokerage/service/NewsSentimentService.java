@@ -2,6 +2,7 @@ package com.example.stockbrokerage.service;
 
 import com.example.stockbrokerage.client.YahooFinanceClient;
 import com.example.stockbrokerage.dto.NewsItem;
+import com.example.stockbrokerage.dto.OllamaSettingsResponse;
 import com.example.stockbrokerage.dto.TrendPrediction.TrendDirection;
 import com.example.stockbrokerage.entity.NewsSentimentAnalysis;
 import com.example.stockbrokerage.entity.NewsSentimentAnalysis.Sentiment;
@@ -38,15 +39,10 @@ public class NewsSentimentService {
     private final YahooFinanceClient yahooFinanceClient;
     private final NewsSentimentAnalysisRepository sentimentRepository;
     private final ObjectMapper objectMapper;
-
-    @Value("${app.news-analysis.ollama.url:http://localhost:11434/api/chat}")
-    private String ollamaUrl;
+    private final OllamaSettingsService ollamaSettingsService;
 
     @Value("${app.news-analysis.ollama.fallback-url:http://host.docker.internal:11434/api/chat}")
     private String ollamaFallbackUrl;
-
-    @Value("${app.news-analysis.ollama.model:gemma3:1b}")
-    private String ollamaModel;
 
     @Value("${app.news-analysis.ollama.temperature:0.2}")
     private double ollamaTemperature;
@@ -117,6 +113,7 @@ public class NewsSentimentService {
     }
 
     private void persist(NewsItem item, AnalysisResult analysis, NewsSentimentAnalysis existing) {
+        OllamaSettingsResponse settings = ollamaSettingsService.getSettings();
         NewsSentimentAnalysis entity = existing != null ? existing : new NewsSentimentAnalysis();
         entity.setSymbol(item.symbol());
         entity.setExternalNewsId(item.externalId());
@@ -128,7 +125,7 @@ public class NewsSentimentService {
         entity.setSentiment(analysis.sentiment());
         entity.setSentimentConfidence(analysis.confidence());
         entity.setAnalysisReason(trimTo(analysis.reason(), 2000));
-        entity.setLlmModel(ollamaModel);
+        entity.setLlmModel(settings.model());
         entity.setAnalyzedAt(LocalDateTime.now());
 
         try {
@@ -149,9 +146,10 @@ public class NewsSentimentService {
 
     private AnalysisResult analyzeViaOllama(NewsItem item) {
         String prompt = buildPrompt(item);
+        OllamaSettingsResponse settings = ollamaSettingsService.getSettings();
 
         Map<String, Object> payload = new HashMap<>();
-        payload.put("model", ollamaModel);
+        payload.put("model", settings.model());
         payload.put("messages", List.of(Map.of("role", "user", "content", prompt)));
         payload.put("stream", false);
         payload.put("temperature", ollamaTemperature);
@@ -160,7 +158,7 @@ public class NewsSentimentService {
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
-        List<String> candidateUrls = resolveCandidateUrls();
+        List<String> candidateUrls = resolveCandidateUrls(settings.endpoint());
         int totalAttempts = Math.max(0, maxRetries) + 1;
         Exception lastException = null;
 
@@ -254,7 +252,7 @@ public class NewsSentimentService {
         return new RestTemplate(requestFactory);
     }
 
-    private List<String> resolveCandidateUrls() {
+    private List<String> resolveCandidateUrls(String ollamaUrl) {
         List<String> urls = new ArrayList<>();
         urls.add(ollamaUrl);
 
