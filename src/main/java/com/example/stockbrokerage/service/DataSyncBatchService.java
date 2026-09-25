@@ -1,6 +1,7 @@
 package com.example.stockbrokerage.service;
 
 import com.example.stockbrokerage.entity.JobExecutionRecord;
+import com.example.stockbrokerage.entity.StockPriceCache;
 import com.example.stockbrokerage.repository.StockPriceCacheRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -101,7 +102,10 @@ public class DataSyncBatchService {
         LocalDateTime now = LocalDateTime.now();
         for (BarRow row : rows) {
             try {
-                stockPriceCacheRepository.upsertBar(symbol, row.barTime, row.closePrice, now);
+                if (!stockPriceCacheRepository.existsBySymbolAndBarTime(symbol, row.barTime)) {
+                    stockPriceCacheRepository.save(new StockPriceCache(
+                            null, symbol, row.barTime, row.closePrice, now));
+                }
             } catch (Exception e) {
                 log.warn("Skipping bar {}/{} due to error: {}", symbol, row.barTime, e.getMessage());
             }
