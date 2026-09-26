@@ -51,7 +51,15 @@ jobs:
         run: mvn --batch-mode org.apache.maven.plugins:maven-checkstyle-plugin:3.3.1:check -Dcheckstyle.config.location=quality/config/checkstyle.xml -Dcheckstyle.failOnViolation=true
 
       - name: PMD
-        run: mvn --batch-mode org.apache.maven.plugins:maven-pmd-plugin:3.21.2:check -Dpmd.rulesets=quality/config/pmd-ruleset.xml -Dpmd.targetJdk=17 -Dmaven.compiler.source=17 -Dmaven.compiler.target=17 -Dmaven.compiler.release=17
+        run: mvn --batch-mode org.apache.maven.plugins:maven-pmd-plugin:3.28.0:pmd -Dpmd.rulesets=quality/config/pmd-ruleset.xml -Dpmd.targetJdk=25
+
+      - name: Upload PMD report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: pmd-report
+          path: target/pmd.xml
+          if-no-files-found: ignore
 
       - name: Semgrep
         run: semgrep scan --config quality/static-security/semgrep.yml src frontend/src
