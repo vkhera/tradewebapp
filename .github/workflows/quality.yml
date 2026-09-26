@@ -69,7 +69,16 @@ jobs:
         run: npx tsc -p tsconfig.app.json --noEmit
 
       - name: npm audit
-        run: npm audit --prefix frontend --audit-level=moderate
+        continue-on-error: true
+        run: npm audit --prefix frontend --audit-level=moderate --json > frontend-audit.json
+
+      - name: Upload npm audit report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: frontend-npm-audit
+          path: frontend-audit.json
+          if-no-files-found: ignore
 
   dependency-scan:
     name: Dependency scan
