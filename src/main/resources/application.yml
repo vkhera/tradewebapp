@@ -77,9 +77,9 @@ logging:
   # Console pattern includes traceId/spanId injected by Micrometer Tracing via MDC
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{traceId:-},%X{spanId:-}] - %msg%n"
-  # Plain text log (kept for compatibility); JSON log written by logback-spring.xml
+  # Use a writable temp location in containerized deployments; bind-mounted host logs are not guaranteed writable by the non-root app user.
   file:
-    name: logs/stock-brokerage.log
+    name: ${LOGGING_FILE_NAME:/tmp/stock-brokerage.log}
     max-size: 10MB
     max-history: 30
 

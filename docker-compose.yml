@@ -35,6 +35,11 @@ services:
   backend:
     image: vkdocker/stock-brokerage-backend:${APP_VERSION:-latest}
     container_name: stockbrokerage-backend
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -88,6 +93,16 @@ services:
   frontend:
     image: vkdocker/stock-brokerage-frontend:${APP_VERSION:-latest}
     container_name: stockbrokerage-frontend
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
     ports:
       - "80:80"
       - "443:443"

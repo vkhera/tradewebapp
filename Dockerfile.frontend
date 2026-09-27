@@ -1,7 +1,7 @@
 # ──────────────────────────────────────────────
-# Stage 1 – Build Angular with Node 18
+# Stage 1 – Build Angular with Node 20
 # ──────────────────────────────────────────────
-FROM node:18-alpine AS build
+FROM node:20-alpine AS build
 WORKDIR /app
 
 # Cache npm dependencies
@@ -15,11 +15,11 @@ RUN npx ng build --configuration=production --prerender=false
 # ──────────────────────────────────────────────
 # Stage 2 – Serve with nginx (HTTP + HTTPS)
 # ──────────────────────────────────────────────
-FROM nginx:1.27-alpine
+FROM nginx:1.29.1-alpine
 WORKDIR /usr/share/nginx/html
 
-# Install openssl for self-signed cert generation
-RUN apk add --no-cache openssl
+# Install openssl for self-signed cert generation and refresh OS packages
+RUN apk update && apk add --no-cache openssl && apk upgrade --no-cache
 
 # Remove default nginx content
 RUN rm -rf ./*
@@ -37,6 +37,5 @@ RUN chmod +x /docker-entrypoint-frontend.sh
 EXPOSE 80 443
 
 ENTRYPOINT ["/docker-entrypoint-frontend.sh"]
-
 
 CMD ["nginx", "-g", "daemon off;"]

@@ -13,7 +13,8 @@
 
     <!-- ── Properties ───────────────────────────────────────────────── -->
     <springProperty name="APP_NAME"  source="spring.application.name" defaultValue="stock-brokerage"/>
-    <springProperty name="LOG_FILE"  source="logging.file.name"       defaultValue="logs/stock-brokerage.log"/>
+    <springProperty name="LOG_FILE" source="logging.file.name" defaultValue="/tmp/stock-brokerage.log"/>
+    <springProperty name="LOG_JSON_FILE" source="logging.file.json" defaultValue="/tmp/stock-brokerage.json"/>
 
     <!-- ═══════════════════════════════════════════════════════════════
          CONSOLE – color, human-readable, includes trace/span IDs
@@ -48,9 +49,9 @@
            service (custom field)
          ═══════════════════════════════════════════════════════════════ -->
     <appender name="FILE_JSON" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/stock-brokerage.json</file>
+        <file>${LOG_JSON_FILE}</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>logs/stock-brokerage.%d{yyyy-MM-dd}.%i.json.gz</fileNamePattern>
+            <fileNamePattern>${LOG_JSON_FILE}.%d{yyyy-MM-dd}.%i.json.gz</fileNamePattern>
             <maxFileSize>10MB</maxFileSize>
             <maxHistory>7</maxHistory>
             <totalSizeCap>200MB</totalSizeCap>
